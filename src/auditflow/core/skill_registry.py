@@ -24,14 +24,28 @@ class Skill(ConfigModel):
         return contained_path(self._directory, "SKILL.md")
 
 
-class SkillRegistry:
-    def __init__(self, root: Path) -> None:
-        self.root = root.resolve()
+SkillManifest = Skill
 
-    def get(self, name: str) -> Skill:
-        if relative_path(name).count("/") != 1:
-            raise ValueError("skill names must use category/name")
-        directory = contained_path(self.root, name)
+
+class SkillRegistry:
+    def __init__(
+        self,
+        root: Path,
+        custom_root: Path | None = None,
+        *,
+        include_custom: bool = True,
+    ) -> None:
+        self.root = root.resolve()
+        if not include_custom:
+            self.custom_root = None
+        elif custom_root is not None:
+            self.custom_root = custom_root.resolve()
+        else:
+            default_custom = (self.root.parent / "skills_custom").resolve()
+            self.custom_root = default_custom if default_custom.is_dir() else None
+
+    def _load_from(self, base: Path, name: str) -> Skill:
+        directory = contained_path(base, name)
         manifest = Skill.model_validate(read_yaml(contained_path(directory, "skill.yaml")))
         if manifest.name != name:
             raise ValueError(f"skill manifest name does not match its directory: {name}")
@@ -42,8 +56,23 @@ class SkillRegistry:
             relative_path(value)
         return manifest
 
+    def get(self, name: str) -> Skill:
+        if relative_path(name).count("/") != 1:
+            raise ValueError("skill names must use category/name")
+        if self.custom_root is not None:
+            candidate_dir = contained_path(self.custom_root, name)
+            if (candidate_dir / "skill.yaml").is_file():
+                return self._load_from(self.custom_root, name)
+        return self._load_from(self.root, name)
+
     def list(self) -> list[str]:
-        return [
+        names = {
             path.parent.relative_to(self.root).as_posix()
-            for path in sorted(self.root.glob("*/*/skill.yaml"))
-        ]
+            for path in self.root.glob("*/*/skill.yaml")
+        }
+        if self.custom_root is not None and self.custom_root.is_dir():
+            names.update(
+                path.parent.relative_to(self.custom_root).as_posix()
+                for path in self.custom_root.glob("*/*/skill.yaml")
+            )
+        return sorted(names)

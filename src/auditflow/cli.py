@@ -42,7 +42,7 @@ from auditflow.reporting.report import generate_report
 from auditflow.scout.dedup import save_new_projects
 from auditflow.scout.platforms import import_projects, search_projects
 from auditflow.sync import sync_pull
-from auditflow.ui.server import run_ui
+from auditflow.ui import run_ui
 
 app = typer.Typer(no_args_is_help=True, help="Modular multi-agent security audit & disclosure CLI.")
 console = Console()

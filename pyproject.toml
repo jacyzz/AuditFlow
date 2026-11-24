@@ -20,6 +20,8 @@ dependencies = [
     "Pillow>=10.0",
     "python-docx>=1.1",
     "openpyxl>=3.1",
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
 ]
 
 [project.optional-dependencies]
@@ -33,7 +35,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "auditflow.evidence" = ["templates/*.html", "templates/*.css"]
-"auditflow.ui" = ["static/*.html"]
+"auditflow.ui" = ["static/*.html", "dist/*", "dist/**/*"]
 
 [tool.setuptools.data-files]
 "share/auditflow/config" = ["config/pipeline.example.yaml", "config/env.example.yaml"]

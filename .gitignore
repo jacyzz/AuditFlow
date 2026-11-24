@@ -1,10 +1,17 @@
 # Runtime configs with secrets / local paths
 config/pipeline.yaml
 config/env.yaml
+config/providers.yaml
+config/agent_profiles.yaml
 .env
 
-# Local caches, workspaces & generated reports
+# Frontend node_modules & build cache
+frontend/node_modules/
+*.tsbuildinfo
+
+# Local caches, workspaces, custom skills & generated reports
 .auditflow_cache/
+skills_custom/
 workspaces/
 output/
 *.docx
@@ -16,8 +23,8 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
-dist/
-build/
+/dist/
+/build/
 *.egg-info/
 .pytest_cache/
 .ruff_cache/

@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --surface-2: #f1f5f9;
+  --border: #e2e8f0;
+  --fg: #0f172a;
+  --muted: #64748b;
+  --accent: #0284c7;
+}
+
+.dark {
+  --bg: #0b1120;
+  --surface: #111827;
+  --surface-2: #172033;
+  --border: #1f2d44;
+  --fg: #e5edf8;
+  --muted: #8b9bb4;
+  --accent: #38bdf8;
+}
+
+body {
+  font-family: "Inter", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
+
+.md-prose h1 { font-size: 1.25rem; font-weight: 700; margin: 0.75rem 0 0.5rem; }
+.md-prose h2 { font-size: 1.05rem; font-weight: 600; margin: 0.75rem 0 0.4rem; }
+.md-prose h3 { font-size: 0.95rem; font-weight: 600; margin: 0.6rem 0 0.3rem; }
+.md-prose p { margin: 0.4rem 0; line-height: 1.6; }
+.md-prose ul, .md-prose ol { margin: 0.4rem 0; padding-left: 1.35rem; }
+.md-prose ul { list-style: disc; }
+.md-prose ol { list-style: decimal; }
+.md-prose li { margin: 0.2rem 0; }
+.md-prose code {
+  font-family: Consolas, ui-monospace, monospace;
+  font-size: 0.85em;
+  background: var(--surface-2);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+}
+.md-prose pre {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  padding: 0.75rem;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 0.5rem 0;
+}
+.md-prose pre code { background: transparent; padding: 0; }

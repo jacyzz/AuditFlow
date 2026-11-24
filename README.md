@@ -1,33 +1,33 @@
 # AuditFlow
 
-> **Modular, Pluggable Multi-Agent Open-Source Security Audit & CNVD Responsible Disclosure Workflow**
+> **Modular, Pluggable Multi-Agent Open-Source Security Audit & CNVD Responsible Disclosure Studio (v2.0)**
 >
-> 一个面向开源软件安全审计与负责任漏洞披露（CNVD / CVD）的**全环节可插拔多 Agent 自动化工作流框架**（内置本地 Web UI 控制台 + CLI + 15 个可切换 Skill）。
+> 一个面向开源软件安全审计与负责任漏洞披露（CNVD / CVD）的**全环节可插拔多 Agent 协作工作台与自动化框架**（内置 **FastAPI + SSE + React + Tailwind** 现代化 5 页 Studio UI + CLI + 15 个可在线编辑/扩展的 Skill）。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-green.svg)](#一安装准备)
-[![Web UI](https://img.shields.io/badge/Web%20UI-auditflow%20ui-0284c7.svg)](#方式一web-ui-可视化控制台推荐日常使用)
+[![Studio UI](https://img.shields.io/badge/Studio%20UI%20v2.0-auditflow%20ui-0284c7.svg)](#方式一auditflow-studio-可视化工作台推荐日常使用)
 
 ---
 
 ## 核心解决什么问题？
 
-把传统“手动逛 GitHub → 扫描 → 审源码 → 配 Docker 环境 → 手动截屏 → 手写 Word 报告 → 逐项填 CNVD 网页”的碎片流程，收口成一条**状态机可控、Agent 可替换、Skill 可切换、自动出图出稿**的流水线：
+把传统“手动逛 GitHub → 扫描 → 审源码 → 配 Docker 环境 → 手动截屏 → 手写 Word 报告 → 逐项填 CNVD 网页”的碎片流程，收口成一个**对话驱动、按 Agent 能力强项自动编排、异构互审防幻觉、自动出图出稿**的开源安全审计工作台：
 
 ```mermaid
 flowchart LR
-    S1["1. 找项目/导清单\nGitHub·Gitee·GitCode\n自动去重"] --> G1{"闸门 1\n项目价值预判\n+ 人工勾选"}
+    S1["1. 找项目/导清单\nGitHub·Gitee·GitCode\n自动去重"] --> G1{"闸门 1\n项目价值预判\n+ 对话内联审批"}
     G1 -->|"通过 & 自动克隆"| S2["2. 安全面测绘\n框架/权限/路由\nsurface.json"]
     S2 --> S3["3. 深度源码审计\n多子Skill并行\naudit-disposition.json"]
-    S3 --> G2{"闸门 2\n漏洞价值预判\n+ 人工勾选"}
+    S3 --> G2{"闸门 2\n异构复核预判\n+ 对话内联审批"}
     G2 --> S4["4. 隔离验证\n官方Docker+代理\n超限自动熔断"]
     S4 --> S5["5. 自动取证出图\n代码/Web/HTTP/终端\nevidence/*.png"]
     S5 --> S6["6. CNVD 双输出\n去人机感 .docx\n+ 提报表单 + 台账"]
 ```
 
-- **Agent 全环节热替换**：同一个流水线里，可以用便宜的 **OpenAI 兼容 API（DeepSeek / Qwen）** 做项目批量初筛、用 **DeepSeek Harness（`dsh`）** 或 **Claude Code** 做大仓库深审、用 **Codex** 做隔离环境验证、用 **Antigravity** 做总控与自然中文写稿——只需修改 `config/pipeline.yaml` 一行配置。
-- **Skill 按项目类型热插拔**：内置 15 个标准化 Skill（如 `scout/ai-agent`、`scout/web-multitenant`、`scout/infra-lib`、`audit/auth-rbac`、`audit/file-exec`、`verify/docker-official`、`report/cnvd-docx-writer`），按统一 JSON 契约流转。
-- **内置零依赖 Web UI 控制台（`auditflow ui`）**：浏览器里直接搜/导项目、点按钮过 Gate 1/2、可视化编辑配置、预览 4 类证据截图、**一键复制 CNVD 网页提报各栏位**并下载 `.docx`。
+- **对话驱动的主理人工作台（Chat-First Coordinator）**：像使用 AI Agent 一样直接下达自然语言指令（如 *“帮我在 GitHub 找 5 个 AI Agent 项目并导入”*、*“按强项推荐一套团队分配方案”*），支持 `@Agent` 点名协作、SSE 流式工具日志以及**内联 Gate 1 / Gate 2 审批卡片**，彻底告别手动复制粘贴。
+- **按强项组织多 Agent & 异构互审**：只读扫描本机已安装的 Agent CLI 与原生配置路径（**Codex / Claude Code / DeepSeek Harness `dsh` / Antigravity CLI / Gemini CLI / OpenCode / OpenAI 兼容 API / Native Subagent**，绝不篡改原生配置）；用能力标签（深度推理、Docker 验证、低成本批量初筛、中文写稿、长上下文、工具调用）一键为 8 个环节分配最优 Agent，并强制提醒**深度审计（`deep_audit`）与漏洞复核（`triage_vuln`）采用异构不同 Agent 交叉复核**。
+- **可视化编排画布 & 在线 Skill Studio**：告别丑陋的配置表——在交互式节点画布中点击节点即可热替换 Skill / Agent / 后端；在 **Skill Studio** 中在线预览 Markdown、双栏编辑 `SKILL.md` 与 `skill.yaml`、导入 `.md`、新建或 Fork Skill，所有修改安全保存在 `skills_custom/` 覆盖层（内置 Skill 永不被覆盖，随时一键恢复默认）。
 - **全场景 4 类自动出图 + 可选真 Burp 导流**：自动生成代码红框图、Playwright 真实本地 Web 对照图、类 Burp Repeater 左右分栏 HTTP 报文图（开启 `burp_upstream_proxy` 后可将验证流量自动导流进本机 Burp History）以及 DB/RPC/CLI/单测终端图。
 
 ---
@@ -152,18 +152,29 @@ auditflow doctor
 
 AuditFlow 提供 **三种操作入口**（底层共享同一份 SQLite 台账与 JSON 契约，可随时混用）：
 
-### 方式一：Web UI 可视化控制台（推荐日常使用）
+### 方式一：AuditFlow Studio 可视化工作台（推荐日常使用）
+
+仓库已内置预构建好的 React + Tailwind 生产包（`src/auditflow/ui/dist/`），安装 Python 依赖后**单命令直接启动**，无需额外配置 Node.js：
 
 ```bash
 auditflow ui
-# 默认打开 http://127.0.0.1:8787（支持 --port 8787 --no-open）
+# 默认由 FastAPI + Uvicorn 启动并打开 http://127.0.0.1:8787（支持 --port 8787 --no-open）
 ```
 
-在浏览器控制台里你可以完成全部操作：
-1. **发现/导入项目**页：输入关键词搜索 GitHub/Gitee/GitCode，或直接粘贴一串仓库 URL 导入去重；
-2. **流水线看板**页：查看每个项目的状态与打分，直接点按钮过 **Gate 1（通过并自动克隆）**、触发测绘/审计/预评判、过 **Gate 2（通过/标误报）**、触发验证与出图，遇到 `NEEDS_HUMAN_ENV` 时一键恢复；
-3. **候选证据 & CNVD 表单**页：直观预览所有高清截图（代码图/页面图/HTTP 图/终端图），一键同步远端产物、生成 `.docx` 并下载，且 **CNVD 提报网页的每一个栏位都带“一键复制”按钮**；
-4. **配置热替换 & 体检**页：**自动扫描本机已安装的 Agent CLI 与 API 环境变量**（Codex / Claude Code / DeepSeek Harness `dsh` / Antigravity CLI / OpenAI 兼容 API），支持勾选启用、注册自定义本机 Agent，并用可视化下拉矩阵为 8 个环节逐一分配 **Skill + Agent + 执行后端**，同时查看 `doctor` 状态和编辑 `env.yaml`。
+工作台包含 **5 个核心页面**：
+1. **对话工作台（Chat-First Coordinator）**：三栏式 Agent 对话工作台（会话列表 + SSE 流式对话与工具调用轨迹 + 右侧团队名册/证据图与 CNVD 栏位一键复制），直接在对话中粘贴仓库链接或发指令，即可弹出**内联 Gate 1 / Gate 2 审批卡片**直接点选放行；
+2. **可视化编排画布（Workflow Studio）**：以交互式节点与连线呈现 8 阶段流水线与两道人工闸门，自带**异构互审检测**（检查 `deep_audit` 与 `triage_vuln` 是否为不同 Agent），支持**「按 Agent 强项一键最优分配」**并在右侧节点检查器中热替换 Skill、Agent 与后端；
+3. **Skill Studio**：按阶段分类浏览全部 Skill，支持 **Markdown 渲染预览 / 双栏实时编辑 `SKILL.md` 与 `skill.yaml` / 新建 Skill / 导入本地 `.md` / Fork 派生**；所有自定义修改保存在 `skills_custom/` 覆盖层，绝不改写内置文件，随时一键恢复默认；
+4. **Agent 能力中心（Agent Hub & API Providers）**：只读探测本机已安装的 Agent CLI 与原生配置目录，可视化管理能力标签、成本档位与首选后端，支持注册自定义 CLI Agent、查看 `doctor` 体检，并提供 **DeepSeek / OpenAI / 阿里云百炼 Qwen / OpenRouter / Ollama** 一键预设与连通性测试；
+5. **环境设置（Settings）**：表单化编辑 `config/env.yaml`（报告输出目录、Excel 同步、SSH Ubuntu、WSL2、Docker 代理与私网 CIDR、可选 Burp 导流），并可随时切回原始 YAML 源码模式。
+
+> 如需二次开发前端界面：
+> ```bash
+> cd frontend
+> npm install
+> npm run dev      # 开发模式（Vite 代理 /api 到 127.0.0.1:8787）
+> npm run build    # 构建生产包至 ../src/auditflow/ui/dist/
+> ```
 
 ### 方式二：在 Antigravity / Claude Code 中“纯 Agent 对话驱动”
 
@@ -298,6 +309,7 @@ python -m pytest -v
 
 ## 工程文档索引
 
+- [v2.0 Studio 架构与 UI 设计规格](docs/V2_STUDIO_DESIGN.md)
 - [架构设计与状态机](docs/ARCHITECTURE.md)
 - [7 个核心 JSON 数据契约](docs/SCHEMAS.md)
 - [可插拔 Agent 适配器与 Skill 规范](docs/ADAPTERS_AND_SKILLS.md)
