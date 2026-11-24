@@ -1,0 +1,7 @@
+name: triage/vuln-worthiness
+stage: triage_vuln
+version: "1.0.0"
+description: "整理 Gate 2 的证据与重复记录"
+inputs: ["audit-disposition.json"]
+outputs: ["audit-disposition.json"]
+recommended_adapter: native-subagent

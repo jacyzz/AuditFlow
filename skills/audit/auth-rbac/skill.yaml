@@ -1,0 +1,7 @@
+name: audit/auth-rbac
+stage: deep_audit
+version: "1.0.0"
+description: "整理认证和授权的防御性审查事实"
+inputs: ["meta.json","surface.json"]
+outputs: ["audit-disposition.json"]
+recommended_adapter: native-subagent

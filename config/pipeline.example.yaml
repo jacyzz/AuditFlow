@@ -1,0 +1,91 @@
+# AuditFlow 流水线编排配置示例
+# 复制为 config/pipeline.yaml 后即可按需热替换任一阶段的 skill、adapter 或 backend
+
+pipeline_name: "default-cnvd-workflow"
+
+# 人工审批闸门配置
+gates:
+  gate1_after_scout: true       # 目标筛选打分后暂停，人工勾选要拉库审计的项目
+  gate2_after_audit: true       # 深度审计并去重排序后暂停，人工勾选进入隔离验证的候选
+  pause_on_env_blocker: true    # 验证环境超重试上限熔断时暂停汇报
+
+# 各阶段自由绑定 Skill + Agent Adapter + Execution Backend
+stages:
+  scout:
+    # 可选切换: scout/ai-agent | scout/web-multitenant | scout/infra-lib | scout/from-list
+    skill: "scout/ai-agent"
+    adapter: "openai-api"       # 确定性 API 脚本 + 便宜模型补全元数据
+    backend: "ssh-ubuntu"       # 可切换为 wsl2 或 local
+    timeout_sec: 300
+
+  triage_project:
+    skill: "triage/project-worthiness"
+    adapter: "openai-api"       # 批量低成本评分排序，也可切换为 native-subagent
+    backend: "local"
+    timeout_sec: 180
+
+  surface_map:
+    skill: "audit/surface-mapper"
+    adapter: "dsh"              # DeepSeek Harness (dsh) 在 Ubuntu 本地零延迟测绘
+    backend: "ssh-ubuntu"
+    timeout_sec: 600
+
+  deep_audit:
+    # 支持多视角专项审计子 Skill 并行产出并自动合并 audit-disposition.json
+    skills:
+      - "audit/auth-rbac"
+      - "audit/file-exec"
+      - "audit/query-parser"
+    adapter: "dsh"              # 可一键替换为 claude-code / codex / native-subagent
+    backend: "ssh-ubuntu"
+    timeout_sec: 1200
+
+  triage_vuln:
+    skill: "triage/vuln-worthiness"
+    adapter: "native-subagent"  # 由 Windows 侧主 Agent（如 Antigravity）复核价值与历史 CVE 去重
+    backend: "local"
+    timeout_sec: 300
+
+  verify:
+    # 可按 target_type 切换: verify/docker-official | verify/cli-harness | verify/vm-plan-only
+    skill: "verify/docker-official"
+    adapter: "codex"            # Codex 专注工程部署、验证对照与落盘事实 verify.json
+    backend: "ssh-ubuntu"
+    timeout_sec: 900
+    max_env_retries: 2          # 超过重试上限立即清理容器并熔断为 NEEDS_HUMAN_ENV
+
+  evidence:
+    # 确定性 4 类渲染器（code / web / http / term），无需大模型
+    renderers: ["code", "web", "http", "term"]
+    backend: "ssh-ubuntu"
+    timeout_sec: 300
+
+  report:
+    skill: "report/cnvd-docx-writer"
+    adapter: "native-subagent"  # 由 Windows 侧 Antigravity 撰写自然中文正文 + python-docx 出稿
+    backend: "local"
+    timeout_sec: 300
+
+# 适配器参数配置（支持接入任意自定义 CLI）
+adapters:
+  openai-api:
+    base_url_env: "AUDITFLOW_OPENAI_BASE_URL"
+    api_key_env: "AUDITFLOW_OPENAI_API_KEY"
+    model: "deepseek-chat"
+
+  dsh:
+    binary: "dsh"
+    extra_args: ["--non-interactive"]
+
+  codex:
+    binary: "codex"
+    extra_args: ["exec", "--full-auto"]
+
+  claude-code:
+    binary: "claude"
+    extra_args: ["-p", "--output-format", "json"]
+
+  # 自定义新 Agent 接入示例（零代码扩展）
+  custom-example:
+    type: "custom-cli"
+    command_template: "my-agent --skill {skill_path} --workspace {workspace_dir} --out {output_file}"

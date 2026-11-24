@@ -1,0 +1,7 @@
+name: scout/from-list
+stage: scout
+version: "1.0.0"
+description: "导入负责人提供的项目清单"
+inputs: []
+outputs: ["meta.json"]
+recommended_adapter: native-subagent

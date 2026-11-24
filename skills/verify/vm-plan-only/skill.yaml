@@ -1,0 +1,7 @@
+name: verify/vm-plan-only
+stage: verify
+version: "1.0.0"
+description: "整理人工管理的隔离 VM 审查记录"
+inputs: ["audit.json"]
+outputs: ["verify.json"]
+recommended_adapter: native-subagent

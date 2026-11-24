@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "target_id": "github_example_policy_demo",
+  "platform": "github",
+  "repo_url": "https://github.com/example/policy-demo",
+  "homepage": null,
+  "vendor": "示例维护团队",
+  "product": "示例服务",
+  "description": "用于演示权限策略的本地示例应用。",
+  "stars": 0,
+  "license": "MIT",
+  "primary_language": "Python",
+  "languages": [
+    "Python"
+  ],
+  "default_branch": "main",
+  "commit_sha": null,
+  "latest_tag": null,
+  "last_commit_at": "2025-01-15T09:00:00Z",
+  "deploy_modes": [
+    "local-fixture"
+  ],
+  "project_tier": null,
+  "scout_profile": "from-list",
+  "worthiness": null,
+  "local_repo_path": null
+}

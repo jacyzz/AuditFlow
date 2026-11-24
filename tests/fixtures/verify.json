@@ -1,0 +1,62 @@
+{
+  "schema_version": "1.0",
+  "candidate_id": "CAND-01",
+  "verified_by_adapter": "manual",
+  "verified_at": "2025-01-15T09:00:00Z",
+  "verdict": "STATIC_ONLY",
+  "realistic_assessment": {
+    "default_deploy_exploitable": null,
+    "effective_privilege": null,
+    "realistic_notes": "以下记录来自演示服务的健康检查和测试输出。"
+  },
+  "steps": [
+    {
+      "step_no": 1,
+      "title": "健康检查样例",
+      "kind": "http_exchange",
+      "expected": "HTTP 200",
+      "observed": "健康检查返回了成功状态。",
+      "raw_request": "GET /health HTTP/1.1\nHost: localhost",
+      "raw_response": "HTTP/1.1 200 OK\nContent-Type: application/json\n\n{\"status\":\"ready\"}",
+      "highlight_response_patterns": [
+        "200 OK"
+      ],
+      "screenshot": "evidence/http.png"
+    },
+    {
+      "step_no": 2,
+      "title": "测试输出样例",
+      "kind": "terminal_check",
+      "expected": "正常退出",
+      "observed": "退出码为 0。",
+      "command": "python -m pytest -q",
+      "stdout": "1 passed",
+      "highlight_patterns": [
+        "passed"
+      ],
+      "screenshot": "evidence/term.png",
+      "exit_code": 0
+    }
+  ],
+  "evidence_manifest": {
+    "app_home": null,
+    "code_shots": [
+      {
+        "step": 1,
+        "path": "evidence/code.png"
+      }
+    ],
+    "verify_shots": [
+      {
+        "step_no": 1,
+        "path": "evidence/http.png"
+      },
+      {
+        "step_no": 2,
+        "path": "evidence/term.png"
+      }
+    ],
+    "manual_placeholders_needed": []
+  },
+  "cleanup_summary": "演示记录已归档。"
+}

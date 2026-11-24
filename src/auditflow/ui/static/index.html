@@ -1,0 +1,689 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AuditFlow 控制台</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --panel-2: #162033;
+      --border: #334155;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --ok: #22c55e;
+      --warn: #f59e0b;
+      --err: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+      background: var(--bg); color: var(--text); line-height: 1.5;
+    }
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 24px; background: var(--panel-2); border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 20;
+    }
+    header h1 { margin: 0; font-size: 18px; letter-spacing: 0.3px; }
+    header .sub { color: var(--muted); font-size: 12px; margin-left: 10px; }
+    nav { display: flex; gap: 8px; }
+    nav button, .btn {
+      background: var(--panel); color: var(--text); border: 1px solid var(--border);
+      padding: 7px 14px; border-radius: 8px; cursor: pointer; font-size: 13px;
+    }
+    nav button.active, .btn.primary { background: #0284c7; border-color: #38bdf8; color: #fff; }
+    .btn.ok { background: #15803d; border-color: #22c55e; color: #fff; }
+    .btn.danger { background: #b91c1c; border-color: #ef4444; color: #fff; }
+    .btn.sm { padding: 4px 10px; font-size: 12px; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    main { max-width: 1360px; margin: 0 auto; padding: 20px 24px 60px; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .stat { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+    .stat .num { font-size: 26px; font-weight: 700; color: var(--accent); }
+    .stat .lbl { font-size: 12px; color: var(--muted); }
+    .card {
+      background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+      padding: 18px; margin-bottom: 16px;
+    }
+    .card h2 { margin: 0 0 12px; font-size: 16px; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    input, select, textarea {
+      background: var(--bg); color: var(--text); border: 1px solid var(--border);
+      border-radius: 8px; padding: 8px 10px; font-size: 13px; font-family: inherit;
+    }
+    textarea { width: 100%; font-family: Consolas, monospace; min-height: 110px; }
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px;
+      font-weight: 600; background: #334155; color: #e2e8f0;
+    }
+    .badge.GATE1_PENDING, .badge.GATE2_PENDING { background: #78350f; color: #fde68a; }
+    .badge.NEEDS_HUMAN_ENV, .badge.REJECTED_FP, .badge.SKIPPED { background: #7f1d1d; color: #fecaca; }
+    .badge.VERIFIED, .badge.EVIDENCE_READY, .badge.REPORTED, .badge.COMPLETED { background: #14532d; color: #bbf7d0; }
+    .target-card {
+      background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px;
+      padding: 14px; margin-bottom: 12px;
+    }
+    .cand-row {
+      display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;
+      padding: 10px 12px; margin-top: 8px; background: var(--panel); border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .muted { color: var(--muted); font-size: 12px; }
+    .hidden { display: none; }
+    .toast {
+      position: fixed; right: 20px; bottom: 20px; background: #0f172a; border: 1px solid var(--accent);
+      padding: 12px 16px; border-radius: 10px; max-width: 440px; z-index: 99; box-shadow: 0 8px 24px #0008;
+    }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
+    .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+    .gallery img { width: 100%; border-radius: 8px; border: 1px solid var(--border); background: #fff; }
+    .cnvd-field {
+      border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px;
+      background: var(--panel-2);
+    }
+    .cnvd-field-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    pre {
+      margin: 0; white-space: pre-wrap; word-break: break-word; font-family: Consolas, monospace;
+      font-size: 12px; color: #cbd5e1;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+<header>
+  <div>
+    <strong style="font-size:18px">AuditFlow 控制台</strong>
+    <span class="sub" id="pipelineName">加载中...</span>
+  </div>
+  <nav>
+    <button class="active" onclick="showTab('board', this)">流水线看板</button>
+    <button onclick="showTab('scout', this)">发现/导入项目</button>
+    <button onclick="showTab('detail', this)">候选证据 & CNVD 表单</button>
+    <button onclick="showTab('config', this)">配置热替换 & 体检</button>
+  </nav>
+</header>
+
+<main>
+  <!-- Tab 1: Board -->
+  <section id="tab-board">
+    <div class="stats" id="statsBar"></div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between;margin-bottom:12px">
+        <h2 style="margin:0">目标仓库与漏洞候选流水线</h2>
+        <div class="row">
+          <label class="muted">审批人：</label>
+          <input id="actorInput" value="reviewer" style="width:120px" />
+          <button class="btn" onclick="loadOverview()">刷新看板</button>
+        </div>
+      </div>
+      <div id="targetsList" class="muted">加载中...</div>
+    </div>
+  </section>
+
+  <!-- Tab 2: Scout -->
+  <section id="tab-scout" class="hidden">
+    <div class="grid-2">
+      <div class="card">
+        <h2>方式一：GitHub / Gitee / GitCode 关键词搜索</h2>
+        <div class="row" style="margin-bottom:10px">
+          <select id="scoutPlatform">
+            <option value="github">GitHub</option>
+            <option value="gitee">Gitee</option>
+            <option value="gitcode">GitCode</option>
+          </select>
+          <input id="scoutQuery" placeholder="例如：mcp server / ai agent / admin panel" style="flex:1" />
+          <input id="scoutLimit" type="number" value="10" min="1" max="50" style="width:76px" />
+        </div>
+        <button class="btn primary" onclick="runScoutSearch()">抓取并自动去重入库</button>
+        <p class="muted">说明：GitHub/Gitee/GitCode Token 在环境变量中读取，已在台账中的项目会自动跳过。</p>
+      </div>
+      <div class="card">
+        <h2>方式二：直接粘贴自定义项目清单（每行一个仓库 URL）</h2>
+        <textarea id="scoutUrls" placeholder="https://github.com/IceWhaleTech/CasaOS&#10;https://github.com/cskefu/cskefu"></textarea>
+        <div style="margin-top:10px">
+          <button class="btn primary" onclick="runScoutUrls()">导入清单并去重入库</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tab 3: Candidate Detail & CNVD Form -->
+  <section id="tab-detail" class="hidden">
+    <div class="card" id="detailEmpty">
+      <p class="muted">请在“流水线看板”中点击任意候选漏洞的【查看详情 / CNVD 表单】按钮。</p>
+    </div>
+    <div id="detailContent" class="hidden">
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <div>
+            <h2 id="dTitle" style="margin:0"></h2>
+            <div class="muted" id="dMeta"></div>
+          </div>
+          <div class="row">
+            <button class="btn" id="btnSyncPull">从远端拉取产物 (sync-pull)</button>
+            <button class="btn ok" id="btnGenReport">生成 Word + CNVD 表单</button>
+            <a class="btn primary hidden" id="btnDownloadDocx" target="_blank">下载 .docx 报告</a>
+          </div>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <h2>CNVD 网页提报表单（逐项一键复制）</h2>
+          <div id="cnvdFields"></div>
+        </div>
+        <div class="card">
+          <h2>自动取证截图画廊（evidence/*.png）</h2>
+          <div id="evidenceGallery" class="gallery"></div>
+          <h2 style="margin-top:18px">验证与部署状态</h2>
+          <pre id="verifyRaw"></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tab 4: Config & Doctor -->
+  <section id="tab-config" class="hidden">
+    <div class="card">
+      <div class="row" style="justify-content:space-between;margin-bottom:10px">
+        <div>
+          <h2 style="margin:0">1. 本机 Agent 自动识别与启用</h2>
+          <div class="muted">自动扫描电脑 PATH 与环境变量中已有的 Agent CLI / API，勾选启用后即可在下方各阶段下拉框中自由分配</div>
+        </div>
+        <button class="btn" onclick="loadAgentStudio()">重新扫描本机 Agent</button>
+      </div>
+      <table>
+        <thead><tr><th style="width:60px">启用</th><th>Agent 名称</th><th>探测状态</th><th>位置 / 说明</th></tr></thead>
+        <tbody id="agentDiscoverRows"></tbody>
+      </table>
+      <div class="row" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+        <strong style="font-size:13px">注册自定义本机 Agent：</strong>
+        <input id="customAgentName" placeholder="名称，如 my-agent" style="width:150px" />
+        <input id="customAgentCmd" placeholder="命令模板，如 my-agent --skill {skill_path} --workspace {workspace_dir} --out {output_file}" style="flex:1;min-width:260px" />
+        <button class="btn" onclick="addCustomAgent()">添加并启用</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between;margin-bottom:10px">
+        <div>
+          <h2 style="margin:0">2. 可视化编排：为每个环节分配 Agent、Skill 与执行后端</h2>
+          <div class="muted">点选保存后自动校验 Pydantic 契约并写入 pipeline.yaml，同时同步下方 YAML 编辑器</div>
+        </div>
+        <button class="btn ok" onclick="applyVisualPipeline()">保存可视化编排到 pipeline.yaml</button>
+      </div>
+      <table>
+        <thead><tr><th>阶段</th><th>分配 Skill（可切换/多选）</th><th>分配 Agent</th><th>执行后端</th><th style="width:90px">超时(s)</th></tr></thead>
+        <tbody id="stageAssignRows"></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between;margin-bottom:10px">
+        <h2 style="margin:0">3. 组件健康检查（auditflow doctor）</h2>
+        <button class="btn" onclick="loadDoctor()">重新体检</button>
+      </div>
+      <table>
+        <thead><tr><th>类型</th><th>组件名</th><th>状态</th><th>详情</th></tr></thead>
+        <tbody id="doctorRows"></tbody>
+      </table>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <h2>高级编辑：pipeline.yaml</h2>
+        <p class="muted" id="pipelinePathLabel"></p>
+        <textarea id="pipelineEditor" style="min-height:320px"></textarea>
+        <div style="margin-top:10px">
+          <button class="btn primary" onclick="saveConfigs('pipeline')">校验并保存 pipeline.yaml</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>环境配置：env.yaml（代理 / SSH / Burp 导流 / 输出目录）</h2>
+        <p class="muted" id="envPathLabel"></p>
+        <textarea id="envEditor" style="min-height:320px"></textarea>
+        <div style="margin-top:10px">
+          <button class="btn primary" onclick="saveConfigs('env')">校验并保存 env.yaml</button>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="toast" class="toast hidden"></div>
+
+<script>
+let currentDetail = null;
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.add('hidden'), 4200);
+}
+
+function showTab(name, btn) {
+  document.querySelectorAll('main > section').forEach(s => s.classList.add('hidden'));
+  document.getElementById('tab-' + name).classList.remove('hidden');
+  document.querySelectorAll('header nav button').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  if (name === 'config') { loadAgentStudio(); loadDoctor(); loadConfig(); }
+}
+
+async function api(url, method = 'GET', body = null) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body !== null) opts.body = JSON.stringify(body);
+  const res = await fetch(url, opts);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+  return data;
+}
+
+function actor() {
+  return document.getElementById('actorInput').value.trim() || 'reviewer';
+}
+
+async function loadOverview() {
+  try {
+    const data = await api('/api/overview');
+    document.getElementById('pipelineName').textContent = 'Pipeline: ' + data.pipeline_name;
+    const c = data.counts;
+    document.getElementById('statsBar').innerHTML = [
+      ['目标项目', c.targets],
+      ['待 Gate 1 审批', c.gate1_pending],
+      ['漏洞候选', c.candidates],
+      ['待 Gate 2 审批', c.gate2_pending],
+      ['环境阻塞', c.needs_human_env],
+      ['已验证/待出稿', c.verified],
+      ['已出 CNVD 报告', c.reported],
+    ].map(([l, n]) => `<div class="stat"><div class="num">${n}</div><div class="lbl">${l}</div></div>`).join('');
+
+    const container = document.getElementById('targetsList');
+    if (!data.targets.length) {
+      container.innerHTML = '<p class="muted">暂无跟踪目标，请前往“发现/导入项目”导入仓库或运行 auditflow scout。</p>';
+      return;
+    }
+    container.innerHTML = data.targets.map(t => {
+      const m = t.meta || {};
+      const worth = m.worthiness ? `评分 ${m.worthiness.score} (${m.worthiness.saturation_risk})` : '未评判';
+      const candsHtml = (t.candidates || []).map(cd => `
+        <div class="cand-row">
+          <div>
+            <strong>${cd.candidate_id}</strong> · ${escapeHtml(cd.title)}
+            <span class="badge ${cd.status}">${cd.status}</span>
+            <div class="muted">${cd.cwe || ''} | 等级: ${cd.severity || '-'} | 建议: ${cd.triage_recommendation || '-'}</div>
+          </div>
+          <div class="row">
+            ${cd.status === 'GATE2_PENDING' ? `
+              <button class="btn sm ok" onclick="decide('${t.target_id}','${cd.candidate_id}',true)">Gate 2 通过</button>
+              <button class="btn sm danger" onclick="decide('${t.target_id}','${cd.candidate_id}',false)">标为误报/跳过</button>
+            ` : ''}
+            ${cd.status === 'NEEDS_HUMAN_ENV' ? `<button class="btn sm primary" onclick="resumeEnv('${t.target_id}','${cd.candidate_id}')">恢复环境验证</button>` : ''}
+            ${['VERIFY_APPROVED','DEPLOYING'].includes(cd.status) ? `<button class="btn sm primary" onclick="runStage('verify','${t.target_id}','${cd.candidate_id}')">执行验证</button>` : ''}
+            ${cd.status === 'VERIFIED' ? `<button class="btn sm primary" onclick="runStage('evidence','${t.target_id}','${cd.candidate_id}')">渲染证据图</button>` : ''}
+            <button class="btn sm" onclick="openDetail('${t.target_id}','${cd.candidate_id}')">查看详情 / CNVD 表单</button>
+          </div>
+        </div>
+      `).join('');
+
+      return `
+        <div class="target-card">
+          <div class="row" style="justify-content:space-between">
+            <div>
+              <strong>${escapeHtml(m.product || t.target_id)}</strong>
+              <span class="badge ${t.status}">${t.status}</span>
+              <span class="muted" style="margin-left:8px">${escapeHtml(t.target_id)} · ★ ${m.stars ?? '-'} · ${worth}</span>
+              <div class="muted">${escapeHtml(m.repo_url || '')}</div>
+            </div>
+            <div class="row">
+              ${t.status === 'DISCOVERED' ? `<button class="btn sm" onclick="runStage('triage_project','${t.target_id}')">项目预评判</button>` : ''}
+              ${t.status === 'GATE1_PENDING' ? `
+                <button class="btn sm ok" onclick="decide('${t.target_id}',null,true,true)">Gate 1 通过并克隆</button>
+                <button class="btn sm danger" onclick="decide('${t.target_id}',null,false,false)">跳过项目</button>
+              ` : ''}
+              ${!t.has_repo && t.status !== 'SKIPPED' ? `<button class="btn sm" onclick="cloneTarget('${t.target_id}')">Clone 源码</button>` : ''}
+              ${t.status === 'CLONED' ? `<button class="btn sm primary" onclick="runStage('surface_map','${t.target_id}')">安全面测绘</button>` : ''}
+              ${t.status === 'MAPPED' ? `<button class="btn sm primary" onclick="runStage('deep_audit','${t.target_id}')">深度源码审计</button>` : ''}
+              ${t.status === 'AUDITED' ? `<button class="btn sm" onclick="runStage('triage_vuln','${t.target_id}')">候选预评判</button>` : ''}
+            </div>
+          </div>
+          ${candsHtml}
+        </div>
+      `;
+    }).join('');
+  } catch (e) { toast('加载看板失败: ' + e.message); }
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+async function runScoutSearch() {
+  try {
+    const res = await api('/api/scout', 'POST', {
+      platform: document.getElementById('scoutPlatform').value,
+      query: document.getElementById('scoutQuery').value,
+      limit: Number(document.getElementById('scoutLimit').value || 10),
+    });
+    toast(`已新增 ${res.added} 个不重复目标`);
+    loadOverview();
+    showTab('board', document.querySelector('header nav button'));
+  } catch (e) { toast('抓取失败: ' + e.message); }
+}
+
+async function runScoutUrls() {
+  try {
+    const res = await api('/api/scout', 'POST', { urls: document.getElementById('scoutUrls').value });
+    toast(`已导入 ${res.added} 个新目标`);
+    loadOverview();
+    showTab('board', document.querySelector('header nav button'));
+  } catch (e) { toast('导入失败: ' + e.message); }
+}
+
+async function decide(target, candidate, approve, autoClone = false) {
+  try {
+    await api('/api/decide', 'POST', { target, candidate, approve, actor: actor(), auto_clone: autoClone });
+    toast('审批决定已登记');
+    loadOverview();
+  } catch (e) { toast('审批失败: ' + e.message); }
+}
+
+async function cloneTarget(target) {
+  try {
+    toast('正在执行 git clone --depth 1 ...');
+    const res = await api('/api/clone', 'POST', { target });
+    toast('克隆完成: ' + res.repo_path);
+    loadOverview();
+  } catch (e) { toast('克隆失败: ' + e.message); }
+}
+
+async function resumeEnv(target, candidate) {
+  try {
+    await api('/api/resume-env', 'POST', { target, candidate, actor: actor() });
+    toast('已重新打开环境验证状态');
+    loadOverview();
+  } catch (e) { toast('操作失败: ' + e.message); }
+}
+
+async function runStage(stage, target, candidate = null) {
+  try {
+    toast(`正在执行阶段 ${stage}...`);
+    const res = await api('/api/stage', 'POST', { stage, target, candidate });
+    toast(res.accepted ? `阶段 ${stage} 已完成并验收` : `阶段 ${stage} 已生成交接包，请查看 logs/`);
+    loadOverview();
+  } catch (e) { toast(`阶段 ${stage} 失败: ` + e.message); }
+}
+
+async function openDetail(target, candidate) {
+  try {
+    const d = await api(`/api/candidate/${encodeURIComponent(target)}/${encodeURIComponent(candidate)}`);
+    currentDetail = d;
+    document.getElementById('detailEmpty').classList.add('hidden');
+    document.getElementById('detailContent').classList.remove('hidden');
+    document.getElementById('dTitle').textContent = (d.audit && d.audit.title_hint) || candidate;
+    document.getElementById('dMeta').textContent = `${target} / ${candidate} · 状态: ${d.status || '-'}`;
+
+    const dl = document.getElementById('btnDownloadDocx');
+    if (d.has_docx) {
+      dl.href = `/api/download-docx/${encodeURIComponent(target)}/${encodeURIComponent(candidate)}`;
+      dl.classList.remove('hidden');
+    } else {
+      dl.classList.add('hidden');
+    }
+    document.getElementById('btnSyncPull').onclick = async () => {
+      try {
+        const res = await api('/api/sync-pull', 'POST', { target, candidate });
+        toast(`同步成功（${res.files.length} 个文件）`);
+        openDetail(target, candidate);
+      } catch (e) { toast('同步失败: ' + e.message); }
+    };
+    document.getElementById('btnGenReport').onclick = async () => {
+      try {
+        const res = await api('/api/report', 'POST', { target, candidate });
+        toast('已生成报告与 CNVD 表单：' + res.files[0]);
+        openDetail(target, candidate);
+        loadOverview();
+      } catch (e) { toast('生成报告失败: ' + e.message); }
+    };
+
+    const form = d.cnvd_form;
+    const fieldsEl = document.getElementById('cnvdFields');
+    if (form) {
+      const pairs = [
+        ['漏洞名称', form.vuln_title],
+        ['涉及厂商', form.vendor],
+        ['受影响产品', form.product],
+        ['受影响版本', form.affected_versions],
+        ['官网地址', form.homepage || '未提供'],
+        ['项目地址', form.repo_url],
+        ['漏洞类型', `${form.vuln_category} (${form.cwe})`],
+        ['危害等级', form.severity],
+        ['漏洞描述', form.vuln_description],
+        ['漏洞危害', form.vuln_impact],
+        ['验证方式简述', form.repro_summary],
+        ['修复建议', form.remediation_suggestion],
+      ];
+      fieldsEl.innerHTML = pairs.map(([k, v], i) => `
+        <div class="cnvd-field">
+          <div class="cnvd-field-head">
+            <strong>${k}</strong>
+            <button class="btn sm" onclick="copyText(${i})">一键复制</button>
+          </div>
+          <pre id="cf-${i}">${escapeHtml(v)}</pre>
+        </div>
+      `).join('');
+    } else {
+      fieldsEl.innerHTML = '<p class="muted">尚未产出 audit.json，暂无法生成 CNVD 表单。</p>';
+    }
+
+    const gal = document.getElementById('evidenceGallery');
+    gal.innerHTML = (d.evidence_images || []).length
+      ? d.evidence_images.map(img => `<div><div class="muted" style="margin-bottom:4px">${escapeHtml(img.name)}</div><a href="${img.url}" target="_blank"><img src="${img.url}" alt="${escapeHtml(img.name)}" /></a></div>`).join('')
+      : '<p class="muted">暂无截图，验证通过后点击“渲染证据图”即可自动生成。</p>';
+
+    document.getElementById('verifyRaw').textContent = JSON.stringify(
+      { deploy_log: d.deploy_log, verify: d.verify }, null, 2
+    );
+    showTab('detail', document.querySelectorAll('header nav button')[2]);
+  } catch (e) { toast('加载详情失败: ' + e.message); }
+}
+
+function copyText(idx) {
+  const txt = document.getElementById('cf-' + idx).textContent;
+  navigator.clipboard.writeText(txt).then(() => toast('已复制到剪贴板'));
+}
+
+let studioState = null;
+
+const STAGE_LABELS = {
+  scout: '1. 项目发现 (scout)',
+  triage_project: '2. 项目预评判 (triage_project)',
+  surface_map: '3. 安全面测绘 (surface_map)',
+  deep_audit: '4. 深度源码审计 (deep_audit)',
+  triage_vuln: '5. 漏洞预评判 (triage_vuln)',
+  verify: '6. 隔离环境验证 (verify)',
+  evidence: '7. 自动出图 (evidence)',
+  report: '8. CNVD 报告生成 (report)',
+};
+
+async function loadAgentStudio() {
+  try {
+    studioState = await api('/api/discover-agents');
+    renderAgentStudio();
+  } catch (e) { toast('扫描本机 Agent 失败: ' + e.message); }
+}
+
+function renderAgentStudio() {
+  if (!studioState) return;
+  document.getElementById('agentDiscoverRows').innerHTML = studioState.agents.map((a, idx) => `
+    <tr>
+      <td><input type="checkbox" ${a.enabled ? 'checked' : ''} onchange="toggleAgent(${idx}, this.checked)" /></td>
+      <td><strong>${escapeHtml(a.label)}</strong><div class="muted">${escapeHtml(a.name)} · ${escapeHtml(a.description || '')}</div></td>
+      <td><span class="badge ${a.detected ? 'VERIFIED' : 'GATE1_PENDING'}">${a.detected ? '本机已检测到' : '未在本机发现'}</span></td>
+      <td class="muted">${escapeHtml(a.detail)}</td>
+    </tr>
+  `).join('');
+
+  const enabledAgents = studioState.agents.filter(a => a.enabled).map(a => a.name);
+  if (!enabledAgents.includes('native-subagent')) enabledAgents.push('native-subagent');
+
+  const stageOrder = ['scout', 'triage_project', 'surface_map', 'deep_audit', 'triage_vuln', 'verify', 'evidence', 'report'];
+  document.getElementById('stageAssignRows').innerHTML = stageOrder.map(st => {
+    const cfg = studioState.stages[st] || { backend: 'local', timeout_sec: 300 };
+    const availSkills = studioState.skills_by_stage[st] || [];
+    let skillCell = '';
+    if (st === 'evidence') {
+      const activeR = new Set(cfg.renderers || ['code', 'web', 'http', 'term']);
+      skillCell = ['code', 'web', 'http', 'term'].map(r => `
+        <label style="margin-right:10px;font-size:12px">
+          <input type="checkbox" class="ev-r" data-r="${r}" ${activeR.has(r) ? 'checked' : ''} /> ${r}
+        </label>
+      `).join('');
+    } else if (st === 'deep_audit') {
+      const activeS = new Set(cfg.skills && cfg.skills.length ? cfg.skills : (cfg.skill ? [cfg.skill] : []));
+      skillCell = availSkills.map(s => `
+        <label style="display:inline-block;margin-right:10px;font-size:12px" title="${escapeHtml(s.description)}">
+          <input type="checkbox" class="da-skill" value="${escapeHtml(s.name)}" ${activeS.has(s.name) ? 'checked' : ''} /> ${escapeHtml(s.name)}
+        </label>
+      `).join('');
+    } else {
+      const curSkill = cfg.skill || (availSkills[0] ? availSkills[0].name : '');
+      skillCell = `<select id="st-skill-${st}" style="width:100%">` +
+        availSkills.map(s => `<option value="${escapeHtml(s.name)}" ${s.name === curSkill ? 'selected' : ''}>${escapeHtml(s.name)} — ${escapeHtml(s.description)}</option>`).join('') +
+        `</select>`;
+    }
+
+    const agentOpts = Array.from(new Set([...enabledAgents, ...(cfg.adapter ? [cfg.adapter] : [])]));
+    const agentCell = st === 'evidence'
+      ? '<span class="muted">确定性脚本渲染</span>'
+      : `<select id="st-agent-${st}">` +
+        agentOpts.map(name => `<option value="${escapeHtml(name)}" ${name === cfg.adapter ? 'selected' : ''}>${escapeHtml(name)}</option>`).join('') +
+        `</select>`;
+
+    const backendCell = `<select id="st-backend-${st}">` +
+      studioState.backends.map(b => `<option value="${b}" ${b === cfg.backend ? 'selected' : ''}>${b}</option>`).join('') +
+      `</select>`;
+
+    const timeoutCell = `<input id="st-timeout-${st}" type="number" min="10" max="86400" value="${cfg.timeout_sec || 300}" style="width:82px" />`;
+
+    return `<tr><td><strong>${STAGE_LABELS[st] || st}</strong></td><td>${skillCell}</td><td>${agentCell}</td><td>${backendCell}</td><td>${timeoutCell}</td></tr>`;
+  }).join('');
+}
+
+function toggleAgent(idx, checked) {
+  studioState.agents[idx].enabled = checked;
+  renderAgentStudio();
+}
+
+function addCustomAgent() {
+  const name = document.getElementById('customAgentName').value.trim();
+  const cmd = document.getElementById('customAgentCmd').value.trim();
+  if (!name || !cmd) { toast('请填写自定义 Agent 名称和命令模板'); return; }
+  const exists = studioState.agents.find(a => a.name === name);
+  if (exists) {
+    exists.enabled = true;
+    exists.config = { type: 'custom-cli', command_template: cmd };
+    exists.detail = '自定义命令：' + cmd;
+  } else {
+    studioState.agents.push({
+      name, label: `自定义 Agent (${name})`, kind: 'custom-cli',
+      detected: true, detail: '自定义命令：' + cmd, enabled: true,
+      config: { type: 'custom-cli', command_template: cmd },
+      description: '界面添加的自定义 CLI Agent',
+    });
+  }
+  document.getElementById('customAgentName').value = '';
+  document.getElementById('customAgentCmd').value = '';
+  renderAgentStudio();
+  toast(`已添加 ${name}，请点击“保存可视化编排”生效`);
+}
+
+async function applyVisualPipeline() {
+  if (!studioState) return;
+  try {
+    const adapters = {};
+    const custom_adapters = {};
+    const builtinNames = new Set(['openai-api', 'dsh', 'codex', 'claude-code']);
+    for (const a of studioState.agents) {
+      if (!a.enabled || a.name === 'native-subagent') continue;
+      if (builtinNames.has(a.name)) {
+        adapters[a.name] = a.config || {};
+      } else {
+        custom_adapters[a.name] = a.config || { type: 'custom-cli' };
+      }
+    }
+
+    const stages = {};
+    const stageOrder = ['scout', 'triage_project', 'surface_map', 'deep_audit', 'triage_vuln', 'verify', 'evidence', 'report'];
+    for (const st of stageOrder) {
+      const backend = document.getElementById(`st-backend-${st}`).value;
+      const timeout_sec = Number(document.getElementById(`st-timeout-${st}`).value || 300);
+      if (st === 'evidence') {
+        const renderers = Array.from(document.querySelectorAll('.ev-r:checked')).map(el => el.dataset.r);
+        stages[st] = { renderers: renderers.length ? renderers : ['code'], backend, timeout_sec };
+      } else if (st === 'deep_audit') {
+        const skills = Array.from(document.querySelectorAll('.da-skill:checked')).map(el => el.value);
+        const adapter = document.getElementById(`st-agent-${st}`).value;
+        stages[st] = { skills, adapter, backend, timeout_sec };
+      } else {
+        const skill = document.getElementById(`st-skill-${st}`).value;
+        const adapter = document.getElementById(`st-agent-${st}`).value;
+        const entry = { skill, adapter, backend, timeout_sec };
+        if (st === 'verify' && studioState.stages.verify && studioState.stages.verify.max_env_retries != null) {
+          entry.max_env_retries = studioState.stages.verify.max_env_retries;
+        }
+        stages[st] = entry;
+      }
+    }
+
+    const res = await api('/api/config/apply-visual', 'POST', { adapters, custom_adapters, stages });
+    document.getElementById('pipelineEditor').value = res.pipeline_yaml;
+    toast('已保存可视化编排到 ' + res.pipeline_path);
+    loadDoctor();
+    loadAgentStudio();
+  } catch (e) { toast('保存编排失败: ' + e.message); }
+}
+
+async function loadDoctor() {
+  try {
+    const res = await api('/api/doctor');
+    document.getElementById('doctorRows').innerHTML = res.checks.map(r => `
+      <tr>
+        <td>${r.kind}</td>
+        <td><strong>${escapeHtml(r.name)}</strong></td>
+        <td><span class="badge ${r.ok ? 'VERIFIED' : 'NEEDS_HUMAN_ENV'}">${r.ok ? '可用' : '不可用'}</span></td>
+        <td class="muted">${escapeHtml(r.detail)}</td>
+      </tr>
+    `).join('');
+  } catch (e) { toast('体检失败: ' + e.message); }
+}
+
+async function loadConfig() {
+  try {
+    const res = await api('/api/config');
+    document.getElementById('pipelinePathLabel').textContent = '当前文件：' + res.pipeline_path;
+    document.getElementById('envPathLabel').textContent = '当前文件：' + res.env_path;
+    document.getElementById('pipelineEditor').value = res.pipeline_yaml;
+    document.getElementById('envEditor').value = res.env_yaml;
+  } catch (e) { toast('读取配置失败: ' + e.message); }
+}
+
+async function saveConfigs(which) {
+  try {
+    const payload = which === 'pipeline'
+      ? { pipeline_yaml: document.getElementById('pipelineEditor').value }
+      : { env_yaml: document.getElementById('envEditor').value };
+    await api('/api/config/save', 'POST', payload);
+    toast(`已校验并保存 config/${which}.yaml`);
+    loadDoctor();
+  } catch (e) { toast('配置校验失败: ' + e.message); }
+}
+
+loadOverview();
+</script>
+</body>
+</html>

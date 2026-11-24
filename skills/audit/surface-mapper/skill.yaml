@@ -1,0 +1,7 @@
+name: audit/surface-mapper
+stage: surface_map
+version: "1.0.0"
+description: "整理已审阅的源码结构与权限边界"
+inputs: ["meta.json"]
+outputs: ["surface.json"]
+recommended_adapter: native-subagent

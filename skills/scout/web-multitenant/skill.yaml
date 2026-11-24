@@ -1,0 +1,7 @@
+name: scout/web-multitenant
+stage: scout
+version: "1.0.0"
+description: "整理已授权多租户应用的元数据"
+inputs: []
+outputs: ["meta.json"]
+recommended_adapter: native-subagent

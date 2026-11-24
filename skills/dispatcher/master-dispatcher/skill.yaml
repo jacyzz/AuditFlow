@@ -1,0 +1,7 @@
+name: dispatcher/master-dispatcher
+stage: dispatcher
+version: "1.0.0"
+description: "管理人工审查与产物交接"
+inputs: []
+outputs: []
+recommended_adapter: native-subagent

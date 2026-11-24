@@ -1,0 +1,7 @@
+name: verify/cli-harness
+stage: verify
+version: "1.0.0"
+description: "整理已保存的 CLI 和单元测试记录"
+inputs: ["audit.json"]
+outputs: ["verify.json"]
+recommended_adapter: native-subagent

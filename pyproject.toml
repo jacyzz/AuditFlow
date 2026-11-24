@@ -1,0 +1,66 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "auditflow"
+version = "0.1.0"
+description = "Artifact-driven defensive source review and responsible disclosure"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = [
+    "pydantic>=2.7",
+    "PyYAML>=6.0",
+    "typer>=0.12",
+    "rich>=13.7",
+    "httpx>=0.27",
+    "Pygments>=2.18",
+    "playwright>=1.45",
+    "Pillow>=10.0",
+    "python-docx>=1.1",
+    "openpyxl>=3.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.9"]
+
+[project.scripts]
+auditflow = "auditflow.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"auditflow.evidence" = ["templates/*.html", "templates/*.css"]
+"auditflow.ui" = ["static/*.html"]
+
+[tool.setuptools.data-files]
+"share/auditflow/config" = ["config/pipeline.example.yaml", "config/env.example.yaml"]
+"share/auditflow/skills/dispatcher/master-dispatcher" = ["skills/dispatcher/master-dispatcher/skill.yaml", "skills/dispatcher/master-dispatcher/SKILL.md"]
+"share/auditflow/skills/scout/ai-agent" = ["skills/scout/ai-agent/skill.yaml", "skills/scout/ai-agent/SKILL.md"]
+"share/auditflow/skills/scout/web-multitenant" = ["skills/scout/web-multitenant/skill.yaml", "skills/scout/web-multitenant/SKILL.md"]
+"share/auditflow/skills/scout/infra-lib" = ["skills/scout/infra-lib/skill.yaml", "skills/scout/infra-lib/SKILL.md"]
+"share/auditflow/skills/scout/from-list" = ["skills/scout/from-list/skill.yaml", "skills/scout/from-list/SKILL.md"]
+"share/auditflow/skills/triage/project-worthiness" = ["skills/triage/project-worthiness/skill.yaml", "skills/triage/project-worthiness/SKILL.md"]
+"share/auditflow/skills/triage/vuln-worthiness" = ["skills/triage/vuln-worthiness/skill.yaml", "skills/triage/vuln-worthiness/SKILL.md"]
+"share/auditflow/skills/audit/surface-mapper" = ["skills/audit/surface-mapper/skill.yaml", "skills/audit/surface-mapper/SKILL.md"]
+"share/auditflow/skills/audit/auth-rbac" = ["skills/audit/auth-rbac/skill.yaml", "skills/audit/auth-rbac/SKILL.md"]
+"share/auditflow/skills/audit/file-exec" = ["skills/audit/file-exec/skill.yaml", "skills/audit/file-exec/SKILL.md"]
+"share/auditflow/skills/audit/query-parser" = ["skills/audit/query-parser/skill.yaml", "skills/audit/query-parser/SKILL.md"]
+"share/auditflow/skills/verify/docker-official" = ["skills/verify/docker-official/skill.yaml", "skills/verify/docker-official/SKILL.md"]
+"share/auditflow/skills/verify/cli-harness" = ["skills/verify/cli-harness/skill.yaml", "skills/verify/cli-harness/SKILL.md"]
+"share/auditflow/skills/verify/vm-plan-only" = ["skills/verify/vm-plan-only/skill.yaml", "skills/verify/vm-plan-only/SKILL.md"]
+"share/auditflow/skills/report/cnvd-docx-writer" = ["skills/report/cnvd-docx-writer/skill.yaml", "skills/report/cnvd-docx-writer/SKILL.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = [".auditflow_cache", "output", "workspaces"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]

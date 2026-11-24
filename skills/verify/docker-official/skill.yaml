@@ -1,0 +1,7 @@
+name: verify/docker-official
+stage: verify
+version: "1.0.0"
+description: "登记人工审核的容器环境记录"
+inputs: ["audit.json","deploy-log.json"]
+outputs: ["verify.json"]
+recommended_adapter: native-subagent

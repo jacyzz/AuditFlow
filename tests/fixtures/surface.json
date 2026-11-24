@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "target_id": "github_example_policy_demo",
+  "frameworks": [
+    "Python"
+  ],
+  "runtime_privilege": null,
+  "auth_mechanisms": [
+    {
+      "name": "示例策略",
+      "file": "policy.py",
+      "lines": [
+        2,
+        3
+      ],
+      "bypass_or_skip_conditions": ""
+    }
+  ],
+  "role_model": [
+    "viewer",
+    "member"
+  ],
+  "entrypoints": [],
+  "static_hotspots": []
+}

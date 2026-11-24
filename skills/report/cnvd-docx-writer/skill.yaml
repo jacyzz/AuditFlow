@@ -1,0 +1,7 @@
+name: report/cnvd-docx-writer
+stage: report
+version: "1.0.0"
+description: "根据已审阅的事实撰写 CNVD 表单与 Word 文案"
+inputs: ["meta.json","audit.json","verify.json"]
+outputs: ["cnvd-form.json"]
+recommended_adapter: native-subagent

@@ -1,0 +1,7 @@
+name: scout/ai-agent
+stage: scout
+version: "1.0.0"
+description: "整理已授权 AI 应用项目的元数据"
+inputs: []
+outputs: ["meta.json"]
+recommended_adapter: native-subagent

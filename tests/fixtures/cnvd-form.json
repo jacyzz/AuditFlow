@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "vuln_title": "示例服务 权限策略检查缺失",
+  "vendor": "示例维护团队",
+  "product": "示例服务",
+  "affected_versions": "演示版本 1.0",
+  "homepage": null,
+  "repo_url": "https://github.com/example/policy-demo",
+  "vuln_category": "权限管理",
+  "cwe": "CWE-862",
+  "severity": "中",
+  "vuln_description": "示例策略对访客和成员使用相同判定。",
+  "vuln_impact": "角色限制无法按策略区分。",
+  "repro_summary": "核对示例源码与现有测试记录。",
+  "remediation_suggestion": "将角色检查收敛到统一策略。",
+  "reference_links": [
+    "https://github.com/example/policy-demo"
+  ],
+  "attachment_docx": "github_example_policy_demo__CAND-01.docx"
+}

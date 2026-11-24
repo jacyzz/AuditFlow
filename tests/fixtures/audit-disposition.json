@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "target_id": "github_example_policy_demo",
+  "audited_at": "2025-01-15T09:00:00Z",
+  "audit_adapter": "manual",
+  "audit_model": null,
+  "candidates": [
+    {
+      "candidate_id": "CAND-01",
+      "title_hint": "示例服务 权限策略检查缺失",
+      "category": "permissions",
+      "cwe": "CWE-862",
+      "severity_estimate": "medium",
+      "confidence": "medium",
+      "default_deploy_affected": null,
+      "is_duplicate_cve": null,
+      "triage_recommendation": "NEEDS_MANUAL_REVIEW",
+      "triage_reason": "需维护方核对策略预期。",
+      "human_decision": null,
+      "status": "CANDIDATE_NEW",
+      "audit_file": "candidates/CAND-01/audit.json"
+    }
+  ]
+}

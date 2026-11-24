@@ -1,0 +1,7 @@
+name: scout/infra-lib
+stage: scout
+version: "1.0.0"
+description: "整理已授权基础组件与库的元数据"
+inputs: []
+outputs: ["meta.json"]
+recommended_adapter: native-subagent

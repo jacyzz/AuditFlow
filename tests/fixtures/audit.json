@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0",
+  "target_id": "github_example_policy_demo",
+  "candidate_id": "CAND-01",
+  "title_hint": "示例服务 权限策略检查缺失",
+  "vuln_type": "权限管理",
+  "cwe": [
+    "CWE-862"
+  ],
+  "severity": "中",
+  "cvss_vector": null,
+  "cvss_score": null,
+  "affected_versions": "演示版本 1.0",
+  "default_deploy_affected": null,
+  "preconditions": [
+    "示例应用配置了访客与成员角色。"
+  ],
+  "related_cve": null,
+  "technical_summary": "示例策略对访客和成员使用相同判定。",
+  "impact_summary": "角色限制无法按策略区分。",
+  "code_evidence": [
+    {
+      "step": 1,
+      "file": "policy.py",
+      "start_line": 1,
+      "end_line": 3,
+      "highlight_lines": [
+        3
+      ],
+      "analysis": "示例策略对已知角色使用相同的条件。"
+    }
+  ],
+  "verification_plan": null,
+  "remediation": {
+    "temporary": [
+      "审核角色分配记录。"
+    ],
+    "permanent": [
+      "将角色检查收敛到统一策略。"
+    ]
+  }
+}

@@ -1,0 +1,7 @@
+name: triage/project-worthiness
+stage: triage_project
+version: "1.0.0"
+description: "整理 Gate 1 的人工审查依据"
+inputs: ["meta.json"]
+outputs: ["meta.json"]
+recommended_adapter: native-subagent
