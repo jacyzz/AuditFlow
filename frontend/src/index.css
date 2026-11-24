@@ -1,53 +1,238 @@
 @import "tailwindcss";
+@import "@xyflow/react/dist/style.css";
+
+/* ═══════════════════════════════════════════════════════════════════
+   AuditFlow Studio — Tahoe Neutral Two-Layer Design System
+   Inspired by Dimo Tahoe / native macOS & Linear desktop craft.
+   ═══════════════════════════════════════════════════════════════════ */
 
 :root {
-  --bg: #f8fafc;
+  --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Consolas, ui-monospace, monospace;
+
+  /* Two-layer opaque neutral system (Light primary working scene) */
+  --shell: #f4f4f4;
   --surface: #ffffff;
-  --surface-2: #f1f5f9;
-  --border: #e2e8f0;
-  --fg: #0f172a;
-  --muted: #64748b;
-  --accent: #0284c7;
+  --surface-subtle: #fafafa;
+  --surface-hover: #f0f0f0;
+  --surface-active: #e6e6e6;
+  --control-bg: rgba(0, 0, 0, 0.045);
+
+  /* Ink accent (state-only: primary button, selected row, active ring) */
+  --primary: #1b1b1b;
+  --primary-hover: #303030;
+  --primary-fg: #ffffff;
+
+  /* Typography */
+  --fg: #171717;
+  --fg-secondary: #404040;
+  --muted: #737373;
+  --subtle: #a3a3a3;
+
+  /* Hairlines */
+  --border: rgba(0, 0, 0, 0.085);
+  --border-strong: #d4d4d4;
+
+  /* Ayu-inspired restrained semantic tokens */
+  --ok: #5e8f00;
+  --ok-bg: rgba(134, 179, 0, 0.11);
+  --ok-border: rgba(134, 179, 0, 0.25);
+
+  --warn: #b46d00;
+  --warn-bg: rgba(242, 174, 73, 0.15);
+  --warn-border: rgba(242, 174, 73, 0.35);
+
+  --danger: #d92d20;
+  --danger-bg: rgba(245, 24, 24, 0.08);
+  --danger-border: rgba(245, 24, 24, 0.22);
+
+  --info: #2563eb;
+  --info-bg: rgba(37, 99, 235, 0.08);
+  --info-border: rgba(37, 99, 235, 0.22);
+
+  /* Shadows — flat at rest, soft depth only when floating */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-float: 0 12px 32px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.06);
+
+  /* Canvas dots */
+  --canvas-dot: #d4d4d4;
 }
 
 .dark {
-  --bg: #0b1120;
-  --surface: #111827;
-  --surface-2: #172033;
-  --border: #1f2d44;
-  --fg: #e5edf8;
-  --muted: #8b9bb4;
-  --accent: #38bdf8;
+  /* Pure neutral charcoal — zero blue tint */
+  --shell: #171717;
+  --surface: #1f1f1f;
+  --surface-subtle: #242424;
+  --surface-hover: #2a2a2a;
+  --surface-active: #333333;
+  --control-bg: rgba(255, 255, 255, 0.06);
+
+  /* Pearl Ink accent */
+  --primary: #ededed;
+  --primary-hover: #ffffff;
+  --primary-fg: #141414;
+
+  --fg: #f5f5f5;
+  --fg-secondary: #d4d4d4;
+  --muted: #949494;
+  --subtle: #666666;
+
+  --border: rgba(255, 255, 255, 0.095);
+  --border-strong: rgba(255, 255, 255, 0.18);
+
+  --ok: #9ed130;
+  --ok-bg: rgba(134, 179, 0, 0.14);
+  --ok-border: rgba(134, 179, 0, 0.28);
+
+  --warn: #f4b756;
+  --warn-bg: rgba(242, 174, 73, 0.14);
+  --warn-border: rgba(242, 174, 73, 0.28);
+
+  --danger: #f97066;
+  --danger-bg: rgba(245, 24, 24, 0.14);
+  --danger-border: rgba(245, 24, 24, 0.28);
+
+  --info: #60a5fa;
+  --info-bg: rgba(96, 165, 250, 0.13);
+  --info-border: rgba(96, 165, 250, 0.26);
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.28);
+  --shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.36);
+  --shadow-float: 0 18px 44px rgba(0, 0, 0, 0.52), 0 0 0 1px rgba(255, 255, 255, 0.06);
+
+  --canvas-dot: #363636;
 }
 
-body {
-  font-family: "Inter", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, sans-serif;
+* {
+  border-color: var(--border);
 }
 
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  background: var(--shell);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code, pre, .font-mono {
+  font-family: var(--font-mono);
+}
+
+/* Subtle native scrollbars */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.24);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 128, 0.42);
+}
 
-.md-prose h1 { font-size: 1.25rem; font-weight: 700; margin: 0.75rem 0 0.5rem; }
-.md-prose h2 { font-size: 1.05rem; font-weight: 600; margin: 0.75rem 0 0.4rem; }
-.md-prose h3 { font-size: 0.95rem; font-weight: 600; margin: 0.6rem 0 0.3rem; }
-.md-prose p { margin: 0.4rem 0; line-height: 1.6; }
-.md-prose ul, .md-prose ol { margin: 0.4rem 0; padding-left: 1.35rem; }
+/* Focus ring */
+input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--shell), 0 0 0 3.5px var(--primary);
+}
+
+/* Tahoe Inset Grouped Surface (flat at rest, 1px hairline) */
+.tahoe-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.tahoe-popover {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-float);
+}
+
+/* Clean Markdown Prose */
+.md-prose {
+  color: var(--fg);
+  font-size: 13.5px;
+  line-height: 1.65;
+}
+.md-prose h1 { font-size: 1.25rem; font-weight: 600; letter-spacing: -0.015em; margin: 1rem 0 0.5rem; }
+.md-prose h2 { font-size: 1.05rem; font-weight: 600; letter-spacing: -0.01em; margin: 0.9rem 0 0.4rem; padding-bottom: 0.25rem; border-bottom: 1px solid var(--border); }
+.md-prose h3 { font-size: 0.94rem; font-weight: 600; margin: 0.7rem 0 0.3rem; }
+.md-prose p { margin: 0.45rem 0; }
+.md-prose ul, .md-prose ol { margin: 0.45rem 0; padding-left: 1.35rem; }
 .md-prose ul { list-style: disc; }
 .md-prose ol { list-style: decimal; }
 .md-prose li { margin: 0.2rem 0; }
+.md-prose strong { font-weight: 600; color: var(--fg); }
+.md-prose blockquote {
+  margin: 0.5rem 0;
+  padding: 0.35rem 0.85rem;
+  border-left: 2px solid var(--border-strong);
+  color: var(--muted);
+}
 .md-prose code {
-  font-family: Consolas, ui-monospace, monospace;
-  font-size: 0.85em;
-  background: var(--surface-2);
-  padding: 0.1rem 0.35rem;
-  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.84em;
+  background: var(--control-bg);
+  padding: 0.12rem 0.35rem;
+  border-radius: 5px;
 }
 .md-prose pre {
-  background: var(--surface-2);
+  background: var(--surface-subtle);
   border: 1px solid var(--border);
-  padding: 0.75rem;
-  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
   overflow-x: auto;
-  margin: 0.5rem 0;
+  margin: 0.65rem 0;
 }
-.md-prose pre code { background: transparent; padding: 0; }
+.md-prose pre code { background: transparent; padding: 0; font-size: 12.5px; }
+.md-prose table { width: 100%; border-collapse: collapse; margin: 0.65rem 0; font-size: 12.5px; }
+.md-prose th, .md-prose td { border: 1px solid var(--border); padding: 0.45rem 0.65rem; text-align: left; }
+.md-prose th { background: var(--surface-subtle); font-weight: 600; }
+
+/* React Flow polish */
+.react-flow__attribution { display: none !important; }
+.react-flow__controls {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 10px !important;
+  box-shadow: var(--shadow-sm) !important;
+  overflow: hidden;
+}
+.react-flow__controls-button {
+  background: var(--surface) !important;
+  border-bottom: 1px solid var(--border) !important;
+  color: var(--fg-secondary) !important;
+  width: 28px !important;
+  height: 28px !important;
+}
+.react-flow__controls-button:hover {
+  background: var(--surface-hover) !important;
+}
+.react-flow__controls-button svg { fill: currentColor !important; }
+.react-flow__minimap {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 10px !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+/* CodeMirror seamless integration */
+.cm-editor {
+  height: 100%;
+  font-family: var(--font-mono) !important;
+  font-size: 12.5px !important;
+  background: transparent !important;
+}
+.cm-editor.cm-focused { outline: none !important; }
+.cm-gutters {
+  background: var(--surface-subtle) !important;
+  border-right: 1px solid var(--border) !important;
+  color: var(--subtle) !important;
+}

@@ -503,6 +503,9 @@ def create_app(ctx: UIContext) -> FastAPI:
     assets_dir = dist_dir / "assets"
     if assets_dir.is_dir():
         app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+    agents_dir = dist_dir / "agents"
+    if agents_dir.is_dir():
+        app.mount("/agents", StaticFiles(directory=str(agents_dir)), name="agents")
 
     @app.get("/", response_class=HTMLResponse)
     def serve_root() -> HTMLResponse:

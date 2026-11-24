@@ -534,3 +534,7 @@ def ui(
         )
     except (ValueError, OSError) as exc:
         _fail(exc)
+
+
+if __name__ == "__main__":
+    app()

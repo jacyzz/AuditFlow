@@ -14,5 +14,13 @@ export default defineConfig({
   build: {
     outDir: path.resolve(__dirname, '../src/auditflow/ui/dist'),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          reactflow: ['@xyflow/react'],
+          codemirror: ['@uiw/react-codemirror', '@codemirror/lang-markdown', '@codemirror/lang-yaml', '@codemirror/theme-one-dark'],
+        },
+      },
+    },
   },
 })

@@ -44,6 +44,10 @@ def test_studio_spa_and_assets_served(tmp_path: Path) -> None:
     assert "AuditFlow Studio" in res.text
     # Ensure the built Vite bundle is actually being served rather than the legacy fallback
     assert "/assets/" in res.text
+    # Brand SVG icons served under /agents/
+    icon = client.get("/agents/codex-light.svg")
+    assert icon.status_code == 200
+    assert "svg" in icon.headers.get("content-type", "")
 
 
 def test_agent_profiles_custom_and_heterogeneous_recommendation(tmp_path: Path) -> None:

@@ -1,426 +1,626 @@
-import { useEffect, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  ArrowRight,
-  Bot,
-  Cpu,
-  Layers,
+  Background,
+  BackgroundVariant,
+  Controls,
+  Handle,
+  MarkerType,
+  MiniMap,
+  Position,
+  ReactFlow,
+  useEdgesState,
+  useNodesState,
+  type Edge,
+  type Node,
+  type NodeProps,
+} from '@xyflow/react'
+import {
+  AlertTriangle,
+  Check,
+  CheckCircle2,
+  RotateCcw,
   Save,
-  ShieldCheck,
+  ShieldAlert,
   Sparkles,
-  Wand2,
 } from 'lucide-react'
-import { api, CAPABILITY_LABELS, STAGE_META } from '../api'
+import { api } from '../api'
+import { AgentIcon } from '../components/AgentIcon'
+import { Button, Field, Input, SegmentedControl, Select, StatusPill, cn } from '../components/ui'
 
 interface Props {
   overview: any
   onRefresh: () => Promise<void>
   toast: (msg: string) => void
+  dark: boolean
 }
 
-const FLOW_ROW_1 = ['scout', 'triage_project', 'surface_map', 'deep_audit'] as const
-const FLOW_ROW_2 = ['triage_vuln', 'verify', 'evidence', 'report'] as const
+const STAGE_META = [
+  { key: 'scout', step: '01', title: '找项目 · Scout', subtitle: '仓库发现与去重', pos: { x: 40, y: 60 } },
+  { key: 'triage_project', step: '02', title: '项目预判', subtitle: 'CNVD 价值与红海评估', pos: { x: 320, y: 60 } },
+  { key: 'surface_map', step: '03', title: '安全面测绘', subtitle: '路由、鉴权与高危入口', pos: { x: 760, y: 60 } },
+  { key: 'deep_audit', step: '04', title: '深度源码审计', subtitle: '多子 Skill 并行审计', pos: { x: 1040, y: 60 } },
+  { key: 'triage_vuln', step: '05', title: '异构漏洞复核', subtitle: '交叉验证去误报', pos: { x: 40, y: 270 } },
+  { key: 'verify', step: '06', title: '隔离验证', subtitle: '官方 Docker + 代理熔断', pos: { x: 480, y: 270 } },
+  { key: 'evidence', step: '07', title: '确定性出图', subtitle: '代码 / Web / HTTP / 终端', pos: { x: 760, y: 270 } },
+  { key: 'report', step: '08', title: 'CNVD 双输出', subtitle: '.docx 报告 + 提报表单', pos: { x: 1040, y: 270 } },
+] as const
 
-export default function WorkflowStudio({ onRefresh, toast }: Props) {
+const ALL_RENDERERS = ['code', 'web', 'http', 'term']
+
+type StageNodeData = {
+  step: string
+  stageKey: string
+  title: string
+  subtitle: string
+  adapter: string
+  adapterDisplay: string
+  backend: string
+  skillSummary: string
+  selected: boolean
+  dark: boolean
+  warning?: string
+}
+
+type GateNodeData = {
+  label: string
+  sublabel: string
+  pendingCount: number
+}
+
+const StageNode = memo(function StageNode({ data }: NodeProps<Node<StageNodeData>>) {
+  return (
+    <div
+      className={cn(
+        'w-[232px] rounded-[12px] border bg-[var(--surface)] p-3 text-left transition-all duration-150',
+        data.selected
+          ? 'border-[var(--primary)] ring-2 ring-[var(--primary)]/18 shadow-[var(--shadow-sm)]'
+          : 'border-[var(--border)] shadow-[var(--shadow-xs)] hover:border-[var(--border-strong)]',
+      )}
+    >
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="!h-2 !w-2 !border-[var(--surface)] !bg-[var(--border-strong)]"
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="!h-2 !w-2 !border-[var(--surface)] !bg-[var(--border-strong)]"
+      />
+
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-mono text-[10.5px] font-semibold text-[var(--muted)]">
+          STEP {data.step}
+        </span>
+        <span className="rounded-md bg-[var(--control-bg)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--muted)]">
+          {data.backend}
+        </span>
+      </div>
+
+      <div className="mt-1.5 text-[13.5px] font-semibold text-[var(--fg)]">{data.title}</div>
+      <div className="text-[11px] text-[var(--muted)]">{data.subtitle}</div>
+
+      <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-[var(--border)] pt-2">
+        {data.stageKey === 'evidence' ? (
+          <span className="text-[11.5px] font-medium text-[var(--fg-secondary)]">
+            内置确定性渲染器
+          </span>
+        ) : (
+          <div className="flex min-w-0 items-center gap-1.5">
+            <AgentIcon agent={data.adapter} dark={data.dark} size={15} />
+            <span className="truncate text-[12px] font-medium text-[var(--fg)]">
+              {data.adapterDisplay}
+            </span>
+          </div>
+        )}
+        {data.warning && (
+          <span title={data.warning} className="text-[var(--warn)]">
+            <AlertTriangle className="h-3.5 w-3.5" />
+          </span>
+        )}
+      </div>
+
+      <div className="mt-1 truncate font-mono text-[10.5px] text-[var(--subtle)]">
+        {data.skillSummary}
+      </div>
+    </div>
+  )
+})
+
+const GateNode = memo(function GateNode({ data }: NodeProps<Node<GateNodeData>>) {
+  return (
+    <div className="w-[144px] rounded-[12px] border border-[var(--warn-border)] bg-[var(--warn-bg)] px-3 py-2.5 text-center backdrop-blur-[2px]">
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="!h-2 !w-2 !border-[var(--surface)] !bg-[var(--warn)]"
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="!h-2 !w-2 !border-[var(--surface)] !bg-[var(--warn)]"
+      />
+      <div className="flex items-center justify-center gap-1 text-[11.5px] font-semibold text-[var(--warn)]">
+        <ShieldAlert className="h-3.5 w-3.5" />
+        <span>{data.label}</span>
+      </div>
+      <div className="mt-0.5 text-[10.5px] text-[var(--fg-secondary)]">{data.sublabel}</div>
+      {data.pendingCount > 0 && (
+        <div className="mt-1 inline-block rounded-full bg-[var(--warn)] px-1.5 py-0.5 text-[10px] font-semibold text-white">
+          {data.pendingCount} 待审批
+        </div>
+      )}
+    </div>
+  )
+})
+
+const nodeTypes = { stageNode: StageNode, gateNode: GateNode }
+
+export default function WorkflowStudio({ overview, onRefresh, toast, dark }: Props) {
   const [stages, setStages] = useState<Record<string, any>>({})
   const [profiles, setProfiles] = useState<any[]>([])
   const [recommendations, setRecommendations] = useState<Record<string, any>>({})
-  const [skillsByStage, setSkillsByStage] = useState<Record<string, any[]>>({})
-  const [selectedStage, setSelectedStage] = useState<string>('deep_audit')
+  const [skillsByStage, setSkillsByStage] = useState<
+    Record<string, { name: string; description: string }[]>
+  >({})
+  const [selectedKey, setSelectedKey] = useState<string>('deep_audit')
   const [saving, setSaving] = useState(false)
 
-  const loadData = async () => {
+  const load = async () => {
     try {
-      const [cfg, prof, sk] = await Promise.all([
+      const [cfg, prof, disc] = await Promise.all([
         api<any>('/api/config'),
         api<any>('/api/agents/profiles'),
-        api<any>('/api/skills'),
+        api<any>('/api/discover-agents'),
       ])
-      setStages(cfg.pipeline.stages || {})
+      setStages(cfg.pipeline?.stages || {})
       setProfiles(prof.profiles || [])
       setRecommendations(prof.recommendations || {})
-      const grouped: Record<string, any[]> = {}
-      for (const s of sk.skills || []) {
-        grouped[s.stage] = grouped[s.stage] || []
-        grouped[s.stage].push(s)
+      const rawMap = disc.skills_by_stage || {}
+      const norm: Record<string, { name: string; description: string }[]> = {}
+      for (const [stage, items] of Object.entries(rawMap)) {
+        norm[stage] = (Array.isArray(items) ? items : []).map((it: any) =>
+          typeof it === 'string'
+            ? { name: it, description: '' }
+            : { name: String(it?.name || ''), description: String(it?.description || '') },
+        )
       }
-      setSkillsByStage(grouped)
+      setSkillsByStage(norm)
     } catch (e: any) {
-      toast('加载编排画布失败: ' + e.message)
+      toast('加载编排配置失败: ' + e.message)
     }
   }
 
   useEffect(() => {
-    loadData()
+    load()
   }, [])
+
+  const profileMap = useMemo(() => {
+    const m: Record<string, any> = {}
+    for (const p of profiles) m[p.name] = p
+    return m
+  }, [profiles])
+
+  const deepAdapter = stages.deep_audit?.adapter
+  const triageAdapter = stages.triage_vuln?.adapter
+  const isHeterogeneous = Boolean(deepAdapter && triageAdapter && deepAdapter !== triageAdapter)
+
+  const initialNodes = useMemo<Node[]>(() => {
+    const stageNodes: Node<StageNodeData>[] = STAGE_META.map((m) => {
+      const st = stages[m.key] || {}
+      const adapterName = st.adapter || (m.key === 'evidence' ? 'deterministic' : 'native-subagent')
+      const skillSummary =
+        m.key === 'evidence'
+          ? (st.renderers || ALL_RENDERERS).join(' · ')
+          : Array.isArray(st.skills)
+            ? st.skills.join(', ')
+            : st.skill || '未指定 Skill'
+      return {
+        id: m.key,
+        type: 'stageNode',
+        position: m.pos,
+        data: {
+          step: m.step,
+          stageKey: m.key,
+          title: m.title,
+          subtitle: m.subtitle,
+          adapter: adapterName,
+          adapterDisplay: profileMap[adapterName]?.display_name || adapterName,
+          backend: st.backend || 'local',
+          skillSummary,
+          selected: selectedKey === m.key,
+          dark,
+          warning:
+            m.key === 'triage_vuln' && !isHeterogeneous
+              ? '当前与深度审计同模型，建议异构互审'
+              : undefined,
+        },
+      }
+    })
+
+    const gateNodes: Node<GateNodeData>[] = [
+      {
+        id: 'gate1',
+        type: 'gateNode',
+        position: { x: 584, y: 84 },
+        data: {
+          label: 'Gate 1',
+          sublabel: '人工勾选项目',
+          pendingCount: overview?.counts?.gate1_pending || 0,
+        },
+      },
+      {
+        id: 'gate2',
+        type: 'gateNode',
+        position: { x: 304, y: 294 },
+        data: {
+          label: 'Gate 2',
+          sublabel: '人工放行验证',
+          pendingCount: overview?.counts?.gate2_pending || 0,
+        },
+      },
+    ]
+
+    return [...stageNodes, ...gateNodes]
+  }, [stages, profileMap, selectedKey, dark, isHeterogeneous, overview])
+
+  const initialEdges = useMemo<Edge[]>(() => {
+    const color = dark ? '#525252' : '#b5b5b5'
+    const mk = (source: string, target: string, animated = false): Edge => ({
+      id: `${source}->${target}`,
+      source,
+      target,
+      type: 'smoothstep',
+      animated,
+      style: { stroke: color, strokeWidth: 1.6 },
+      markerEnd: { type: MarkerType.ArrowClosed, color, width: 15, height: 15 },
+    })
+    return [
+      mk('scout', 'triage_project'),
+      mk('triage_project', 'gate1'),
+      mk('gate1', 'surface_map', true),
+      mk('surface_map', 'deep_audit'),
+      mk('deep_audit', 'triage_vuln'),
+      mk('triage_vuln', 'gate2'),
+      mk('gate2', 'verify', true),
+      mk('verify', 'evidence'),
+      mk('evidence', 'report'),
+    ]
+  }, [dark])
+
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
+
+  useEffect(() => {
+    setNodes((prev) => {
+      const posById = new Map(prev.map((n) => [n.id, n.position]))
+      return initialNodes.map((n) => ({
+        ...n,
+        position: posById.get(n.id) || n.position,
+      }))
+    })
+  }, [initialNodes, setNodes])
+
+  useEffect(() => {
+    setEdges(initialEdges)
+  }, [initialEdges, setEdges])
+
+  const resetLayout = () => {
+    setNodes(initialNodes)
+  }
+
+  const onNodeClick = useCallback((_: any, node: Node) => {
+    if (node.type === 'stageNode') {
+      setSelectedKey(node.id)
+    }
+  }, [])
+
+  const patchStage = (key: string, patch: Record<string, any>) => {
+    setStages((prev) => ({ ...prev, [key]: { ...(prev[key] || {}), ...patch } }))
+  }
 
   const applyRecommended = () => {
     const next = { ...stages }
-    for (const [st, rec] of Object.entries(recommendations)) {
-      if (!next[st] || st === 'evidence') continue
-      next[st] = {
-        ...next[st],
+    for (const [k, rec] of Object.entries(recommendations)) {
+      if (k === 'evidence') continue
+      next[k] = {
+        ...(next[k] || {}),
         adapter: rec.adapter,
-        backend: rec.backend,
+        backend: rec.backend || next[k]?.backend || 'local',
       }
     }
     setStages(next)
-    toast('已按 Agent 能力画像与异构互审规则填充最优方案，点击右上角保存生效')
+    toast('已按 Agent 能力强项与异构互审原则预填方案，点击「保存编排」写入 pipeline.yaml')
   }
 
-  const savePipeline = async () => {
+  const saveWorkflow = async () => {
     setSaving(true)
     try {
-      const adapters: Record<string, any> = {}
-      const custom_adapters: Record<string, any> = {}
-      const builtins = new Set(['openai-api', 'dsh', 'codex', 'claude-code'])
-      for (const p of profiles) {
-        if (!p.enabled || p.name === 'native-subagent') continue
-        if (builtins.has(p.name)) adapters[p.name] = p.adapter_config || {}
-        else custom_adapters[p.name] = p.adapter_config || { type: 'custom-cli' }
-      }
-      await api('/api/config/apply-visual', 'POST', { adapters, custom_adapters, stages })
-      toast('已校验并保存编排到 config/pipeline.yaml')
+      await api('/api/config/apply-visual', 'POST', { stages })
+      toast('流水线编排已校验并写入 config/pipeline.yaml')
       await onRefresh()
     } catch (e: any) {
-      toast('保存失败: ' + e.message)
+      toast('保存编排失败: ' + e.message)
     } finally {
       setSaving(false)
     }
   }
 
-  const updateStage = (stage: string, patch: Record<string, any>) => {
-    setStages((prev) => ({ ...prev, [stage]: { ...prev[stage], ...patch } }))
-  }
-
-  const enabledProfiles = profiles.filter((p) => p.enabled)
-  const heteroOk =
-    stages.deep_audit?.adapter &&
-    stages.triage_vuln?.adapter &&
-    stages.deep_audit.adapter !== stages.triage_vuln.adapter
-
-  const renderNode = (stageKey: string) => {
-    const meta = STAGE_META[stageKey]
-    const cfg = stages[stageKey] || {}
-    const active = selectedStage === stageKey
-    const agentObj = profiles.find((p) => p.name === cfg.adapter)
-    const rec = recommendations[stageKey]
-    const skillLabel =
-      stageKey === 'evidence'
-        ? (cfg.renderers || []).join(' · ')
-        : cfg.skills?.length
-          ? `${cfg.skills.length} 个并发 Skill`
-          : cfg.skill || '未选择'
-
-    return (
-      <button
-        key={stageKey}
-        onClick={() => setSelectedStage(stageKey)}
-        className={`relative flex w-56 flex-col rounded-2xl border p-4 text-left transition ${
-          active
-            ? 'border-sky-400 bg-sky-500/10 shadow-lg shadow-sky-500/10'
-            : 'border-[var(--border)] bg-[var(--surface)] hover:border-sky-500/50'
-        }`}
-      >
-        <div className="flex items-center justify-between">
-          <span className="rounded-md bg-sky-500/15 px-2 py-0.5 text-[11px] font-semibold text-sky-400">
-            {meta.role}
-          </span>
-          <span className="rounded bg-[var(--surface-2)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--muted)]">
-            {cfg.backend || 'local'}
-          </span>
-        </div>
-        <div className="mt-2.5 text-sm font-bold">{meta.label}</div>
-        <div className="mt-0.5 text-[11px] text-[var(--muted)]">{meta.desc}</div>
-
-        <div className="mt-3 space-y-1.5 border-t border-[var(--border)] pt-2.5 text-xs">
-          <div className="flex items-center justify-between">
-            <span className="flex items-center gap-1 text-[var(--muted)]">
-              <Bot className="h-3.5 w-3.5" /> Agent
-            </span>
-            <span className="font-semibold text-emerald-400">
-              {stageKey === 'evidence' ? '确定性脚本' : agentObj?.name || cfg.adapter || '-'}
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="flex items-center gap-1 text-[var(--muted)]">
-              <Layers className="h-3.5 w-3.5" /> Skill
-            </span>
-            <span className="max-w-[125px] truncate text-[11px]">{skillLabel}</span>
-          </div>
-        </div>
-
-        {rec && stageKey !== 'evidence' && rec.adapter === cfg.adapter && (
-          <div className="mt-2 flex items-center gap-1 text-[10px] text-sky-400">
-            <Sparkles className="h-3 w-3" /> 能力匹配最优（{rec.score}分）
-          </div>
-        )}
-      </button>
-    )
-  }
-
-  const curCfg = stages[selectedStage] || {}
-  const curSkills = skillsByStage[selectedStage] || []
-  const curRec = recommendations[selectedStage]
+  const curMeta = STAGE_META.find((m) => m.key === selectedKey) || STAGE_META[0]
+  const curStage = stages[selectedKey] || {}
+  const curSkills = skillsByStage[selectedKey] || []
+  const curRec = recommendations[selectedKey]
 
   return (
-    <div className="grid h-full grid-cols-[1fr_370px] overflow-hidden">
-      {/* Visual Canvas */}
-      <div className="flex flex-col overflow-auto bg-[var(--bg)] p-6">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+    <div className="flex h-full flex-col overflow-hidden">
+      {/* Compact Tahoe Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-3">
+        <div className="flex items-center gap-3">
           <div>
-            <h1 className="text-lg font-bold">多 Agent 能力编排画布（Workflow Studio）</h1>
-            <p className="text-xs text-[var(--muted)]">
-              点击任意节点调整绑定的 Agent、Skill 与执行主机；系统自动校验主审与复核是否构成异构互审
+            <h1 className="text-[15.5px] font-semibold tracking-[-0.015em]">可视化编排画布</h1>
+            <p className="text-[11.5px] text-[var(--muted)]">
+              拖拽、缩放并点击任意节点，实时热替换该阶段的 Agent、Skill 与执行后端
             </p>
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={applyRecommended}
-              className="flex items-center gap-1.5 rounded-xl border border-sky-500/40 bg-sky-500/15 px-3.5 py-2 text-xs font-semibold text-sky-400 hover:bg-sky-500/25"
-            >
-              <Wand2 className="h-4 w-4" /> 按 Agent 强项一键最优分配
-            </button>
-            <button
-              disabled={saving}
-              onClick={savePipeline}
-              className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
-            >
-              <Save className="h-4 w-4" /> 保存到 pipeline.yaml
-            </button>
-          </div>
+          {isHeterogeneous ? (
+            <StatusPill tone="ok" dot>
+              <CheckCircle2 className="h-3 w-3" />
+              异构互审已生效（{deepAdapter} ⇄ {triageAdapter}）
+            </StatusPill>
+          ) : (
+            <StatusPill tone="warn" dot>
+              建议深审与复核使用不同 Agent（当前均为 {deepAdapter || '未设置'}）
+            </StatusPill>
+          )}
         </div>
 
-        {/* Heterogeneous Cross-Review Banner */}
-        <div
-          className={`mb-6 flex items-center justify-between rounded-xl border px-4 py-2.5 text-xs ${
-            heteroOk
-              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-              : 'border-amber-500/30 bg-amber-500/10 text-amber-300'
-          }`}
-        >
-          <span className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4" />
-            {heteroOk
-              ? `异构互审已生效：主审 (${stages.deep_audit?.adapter}) ≠ 复核 (${stages.triage_vuln?.adapter})，有效降低单一模型盲区`
-              : `提示：当前主审 (${stages.deep_audit?.adapter || '-'}) 与复核 (${stages.triage_vuln?.adapter || '-'}) 使用了同一 Agent，建议点击「一键最优分配」开启异构互审`}
-          </span>
-        </div>
-
-        {/* Canvas Grid with Connectors & Gates */}
-        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-2)]/50 p-6">
-          <div className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
-            阶段 I · 发现、筛查与源码深审
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            {FLOW_ROW_1.map((st, idx) => (
-              <div key={st} className="flex items-center gap-3">
-                {renderNode(st)}
-                {idx === 1 && (
-                  <div className="flex flex-col items-center rounded-xl border border-amber-500/40 bg-amber-500/15 px-3 py-2 text-[11px] font-semibold text-amber-400">
-                    <span>Gate 1</span>
-                    <span className="text-[10px] font-normal">人工选项目</span>
-                  </div>
-                )}
-                {idx < FLOW_ROW_1.length - 1 && <ArrowRight className="h-4 w-4 text-[var(--muted)]" />}
-              </div>
-            ))}
-          </div>
-
-          <div className="my-6 flex items-center gap-3">
-            <div className="h-px flex-1 bg-[var(--border)]" />
-            <div className="rounded-full border border-amber-500/40 bg-amber-500/15 px-4 py-1 text-xs font-semibold text-amber-400">
-              ↓ Gate 2：人工勾选高价值漏洞候选（过滤低价值与已知 CVE） ↓
-            </div>
-            <div className="h-px flex-1 bg-[var(--border)]" />
-          </div>
-
-          <div className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
-            阶段 II · 异构复核、隔离验证与 CNVD 交付
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            {FLOW_ROW_2.map((st, idx) => (
-              <div key={st} className="flex items-center gap-3">
-                {renderNode(st)}
-                {idx < FLOW_ROW_2.length - 1 && <ArrowRight className="h-4 w-4 text-[var(--muted)]" />}
-              </div>
-            ))}
-          </div>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" onClick={resetLayout}>
+            <RotateCcw className="h-3.5 w-3.5" /> 重置布局
+          </Button>
+          <Button variant="secondary" onClick={applyRecommended}>
+            <Sparkles className="h-3.5 w-3.5" /> 按强项一键分配
+          </Button>
+          <Button variant="primary" disabled={saving} onClick={saveWorkflow}>
+            <Save className="h-3.5 w-3.5" /> {saving ? '保存中...' : '保存编排'}
+          </Button>
         </div>
       </div>
 
-      {/* Right Node Inspector */}
-      <aside className="flex flex-col overflow-y-auto border-l border-[var(--border)] bg-[var(--surface)] p-5">
-        <div className="flex items-center gap-2 border-b border-[var(--border)] pb-3">
-          <Cpu className="h-4 w-4 text-sky-400" />
-          <div>
-            <div className="text-sm font-bold">{STAGE_META[selectedStage]?.label}</div>
-            <div className="text-xs text-[var(--muted)]">
-              岗位：{STAGE_META[selectedStage]?.role} · 节点 `{selectedStage}`
-            </div>
-          </div>
+      {/* Main Split: React Flow Canvas + Right Node Inspector */}
+      <div className="flex flex-1 overflow-hidden">
+        <div className="relative flex-1 bg-[var(--surface-subtle)]">
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onNodeClick={onNodeClick}
+            nodeTypes={nodeTypes}
+            fitView
+            fitViewOptions={{ padding: 0.16 }}
+            minZoom={0.45}
+            maxZoom={1.5}
+          >
+            <Background
+              variant={BackgroundVariant.Dots}
+              gap={18}
+              size={1.2}
+              color="var(--canvas-dot)"
+            />
+            <Controls showInteractive={false} />
+            <MiniMap
+              nodeColor={(n) => (n.type === 'gateNode' ? '#f2ae49' : dark ? '#404040' : '#d4d4d4')}
+              maskColor={dark ? 'rgba(0,0,0,0.45)' : 'rgba(244,244,244,0.65)'}
+              pannable
+              zoomable
+            />
+          </ReactFlow>
         </div>
 
-        {curRec && selectedStage !== 'evidence' && (
-          <div className="mt-4 rounded-xl border border-sky-500/30 bg-sky-500/10 p-3 text-xs">
-            <div className="font-semibold text-sky-400">系统推荐：{curRec.display_name}</div>
-            <div className="mt-1 text-[var(--muted)]">{curRec.reason}</div>
-          </div>
-        )}
-
-        <div className="mt-4 space-y-4 text-xs">
-          {selectedStage !== 'evidence' && (
-            <div>
-              <label className="mb-1.5 block font-semibold">分配执行 Agent</label>
-              <select
-                value={curCfg.adapter || ''}
-                onChange={(e) => updateStage(selectedStage, { adapter: e.target.value })}
-                className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-xs"
-              >
-                {(enabledProfiles.length ? enabledProfiles : profiles).map((p) => (
-                  <option key={p.name} value={p.name}>
-                    {p.display_name} ({p.name}) {p.detected ? '· 已就绪' : '· 远端/待配置'}
-                  </option>
-                ))}
-              </select>
-              {(() => {
-                const chosen = profiles.find((p) => p.name === curCfg.adapter)
-                if (!chosen) return null
-                return (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {(chosen.capabilities || []).map((cap: string) => (
-                      <span
-                        key={cap}
-                        className="rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-[10px] text-[var(--muted)]"
-                      >
-                        {CAPABILITY_LABELS[cap] || cap}
-                      </span>
-                    ))}
-                  </div>
-                )
-              })()}
+        {/* Right Node Inspector */}
+        <aside className="flex w-[348px] shrink-0 flex-col border-l border-[var(--border)] bg-[var(--surface)]">
+          <div className="border-b border-[var(--border)] px-5 py-3.5">
+            <div className="flex items-center justify-between">
+              <span className="font-mono text-[11px] font-semibold text-[var(--muted)]">
+                STEP {curMeta.step} · {curMeta.key}
+              </span>
+              <StatusPill tone="neutral">{curStage.backend || 'local'}</StatusPill>
             </div>
-          )}
+            <h2 className="mt-1 text-[15px] font-semibold">{curMeta.title}</h2>
+            <p className="mt-0.5 text-xs text-[var(--muted)]">{curMeta.subtitle}</p>
+          </div>
 
-          <div>
-            <label className="mb-1.5 block font-semibold">
-              {selectedStage === 'evidence'
-                ? '启用的确定性渲染器'
-                : selectedStage === 'deep_audit'
-                  ? '并发审计子 Skill（可多选）'
-                  : '绑定 Skill'}
-            </label>
-            {selectedStage === 'evidence' ? (
-              <div className="space-y-1.5">
-                {['code', 'web', 'http', 'term'].map((r) => {
-                  const active = (curCfg.renderers || []).includes(r)
-                  return (
-                    <label
-                      key={r}
-                      className="flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={active}
-                        onChange={(e) => {
-                          const prev = new Set(curCfg.renderers || [])
-                          if (e.target.checked) prev.add(r)
-                          else prev.delete(r)
-                          updateStage(selectedStage, { renderers: Array.from(prev) })
-                        }}
-                      />
-                      <span className="font-mono">{r}</span>
-                    </label>
-                  )
-                })}
+          <div className="flex-1 space-y-5 overflow-y-auto p-5">
+            {/* Recommendation Hint */}
+            {curRec && selectedKey !== 'evidence' && (
+              <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface-subtle)] p-3 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-[var(--fg)]">强项推荐</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      patchStage(selectedKey, {
+                        adapter: curRec.adapter,
+                        backend: curRec.backend || curStage.backend || 'local',
+                      })
+                    }
+                    className="text-[11px] font-medium text-[var(--fg)] underline underline-offset-2 hover:opacity-75 cursor-pointer"
+                  >
+                    一键采纳
+                  </button>
+                </div>
+                <div className="mt-1 flex items-center gap-1.5 font-medium">
+                  <AgentIcon agent={curRec.adapter} dark={dark} size={14} />
+                  <span>{curRec.display_name}</span>
+                </div>
+                <p className="mt-1 text-[11.5px] leading-relaxed text-[var(--muted)]">
+                  {curRec.reason}
+                </p>
               </div>
-            ) : selectedStage === 'deep_audit' ? (
-              <div className="space-y-1.5">
-                {curSkills.map((s) => {
-                  const list: string[] = curCfg.skills?.length
-                    ? curCfg.skills
-                    : curCfg.skill
-                      ? [curCfg.skill]
-                      : []
-                  const active = list.includes(s.name)
-                  return (
-                    <label
-                      key={s.name}
-                      className="flex cursor-pointer items-start gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={active}
-                        onChange={(e) => {
-                          const set = new Set(list)
-                          if (e.target.checked) set.add(s.name)
-                          else set.delete(s.name)
-                          updateStage(selectedStage, { skills: Array.from(set), skill: undefined })
+            )}
+
+            {/* Agent Picker */}
+            {selectedKey !== 'evidence' && (
+              <div className="space-y-2">
+                <div className="text-xs font-medium text-[var(--fg-secondary)]">负责 Agent</div>
+                <div className="tahoe-card divide-y divide-[var(--border)] overflow-hidden">
+                  {profiles.map((p) => {
+                    const active = curStage.adapter === p.name
+                    return (
+                      <button
+                        key={p.name}
+                        type="button"
+                        onClick={() => patchStage(selectedKey, { adapter: p.name })}
+                        className={cn(
+                          'flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs transition-colors cursor-pointer',
+                          active
+                            ? 'bg-[var(--surface-active)] font-medium text-[var(--fg)]'
+                            : 'hover:bg-[var(--surface-hover)] text-[var(--fg-secondary)]',
+                        )}
+                      >
+                        <span className="flex min-w-0 items-center gap-2">
+                          <AgentIcon agent={p.name} dark={dark} size={16} />
+                          <span className="truncate">{p.display_name}</span>
+                        </span>
+                        <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
+                          {!p.detected && (
+                            <span className="text-[10px] text-[var(--subtle)]">未就绪</span>
+                          )}
+                          {active && <Check className="h-3.5 w-3.5 text-[var(--fg)]" />}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Skill / Renderers Selector */}
+            {selectedKey === 'evidence' ? (
+              <div className="space-y-2">
+                <div className="text-xs font-medium text-[var(--fg-secondary)]">启用的确定性渲染器</div>
+                <div className="grid grid-cols-2 gap-2">
+                  {ALL_RENDERERS.map((r) => {
+                    const list: string[] = curStage.renderers || ALL_RENDERERS
+                    const checked = list.includes(r)
+                    return (
+                      <button
+                        key={r}
+                        type="button"
+                        onClick={() => {
+                          const next = checked ? list.filter((x) => x !== r) : [...list, r]
+                          if (next.length > 0) patchStage('evidence', { renderers: next })
                         }}
-                        className="mt-0.5"
-                      />
-                      <div>
-                        <div className="font-semibold">{s.name}</div>
-                        <div className="text-[11px] text-[var(--muted)]">{s.description}</div>
-                      </div>
-                    </label>
-                  )
-                })}
+                        className={cn(
+                          'flex items-center justify-between rounded-[10px] border px-3 py-2 font-mono text-xs cursor-pointer',
+                          checked
+                            ? 'border-[var(--primary)] bg-[var(--surface-subtle)] font-medium'
+                            : 'border-[var(--border)] text-[var(--muted)]',
+                        )}
+                      >
+                        <span>{r}</span>
+                        {checked && <Check className="h-3.5 w-3.5" />}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ) : selectedKey === 'deep_audit' ? (
+              <div className="space-y-2">
+                <div className="text-xs font-medium text-[var(--fg-secondary)]">
+                  并行审计子 Skill（多选）
+                </div>
+                <div className="tahoe-card divide-y divide-[var(--border)] overflow-hidden">
+                  {curSkills.map((sk) => {
+                    const list: string[] = curStage.skills || []
+                    const checked = list.includes(sk.name)
+                    return (
+                      <button
+                        key={sk.name}
+                        type="button"
+                        onClick={() => {
+                          const next = checked
+                            ? list.filter((x) => x !== sk.name)
+                            : [...list, sk.name]
+                          if (next.length > 0) patchStage('deep_audit', { skills: next })
+                        }}
+                        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-[var(--surface-hover)] cursor-pointer"
+                      >
+                        <div className="min-w-0">
+                          <div
+                            className={cn(
+                              'truncate font-mono text-xs',
+                              checked ? 'font-medium text-[var(--fg)]' : 'text-[var(--muted)]',
+                            )}
+                          >
+                            {sk.name}
+                          </div>
+                          {sk.description && (
+                            <div className="truncate text-[10.5px] text-[var(--subtle)]">
+                              {sk.description}
+                            </div>
+                          )}
+                        </div>
+                        <span
+                          className={cn(
+                            'flex h-4 w-4 shrink-0 items-center justify-center rounded-full border',
+                            checked
+                              ? 'border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-fg)]'
+                              : 'border-[var(--border-strong)]',
+                          )}
+                        >
+                          {checked && <Check className="h-2.5 w-2.5 stroke-[3]" />}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
             ) : (
-              <select
-                value={curCfg.skill || ''}
-                onChange={(e) => updateStage(selectedStage, { skill: e.target.value, skills: [] })}
-                className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-xs"
-              >
-                {curSkills.map((s) => (
-                  <option key={s.name} value={s.name}>
-                    {s.name} — {s.description}
-                  </option>
-                ))}
-              </select>
+              <Field label="绑定 Skill 模板">
+                <Select
+                  value={curStage.skill || ''}
+                  onChange={(e) => patchStage(selectedKey, { skill: e.target.value })}
+                >
+                  {curSkills.map((sk) => (
+                    <option key={sk.name} value={sk.name}>
+                      {sk.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+
+            {/* Execution Backend */}
+            <Field label="执行后端">
+              <SegmentedControl
+                className="w-full justify-between"
+                value={curStage.backend || 'local'}
+                onChange={(v) => patchStage(selectedKey, { backend: v })}
+                options={[
+                  { value: 'local', label: 'local' },
+                  { value: 'ssh-ubuntu', label: 'ssh-ubuntu' },
+                  { value: 'wsl2', label: 'wsl2' },
+                ]}
+              />
+            </Field>
+
+            {/* Timeout */}
+            {selectedKey !== 'evidence' && (
+              <Field label="单阶段超时（秒）">
+                <Input
+                  type="number"
+                  value={curStage.timeout_sec ?? 600}
+                  onChange={(e) =>
+                    patchStage(selectedKey, { timeout_sec: Math.max(30, Number(e.target.value) || 600) })
+                  }
+                />
+              </Field>
             )}
           </div>
-
-          <div>
-            <label className="mb-1.5 block font-semibold">执行主机（Backend）</label>
-            <select
-              value={curCfg.backend || 'local'}
-              onChange={(e) => updateStage(selectedStage, { backend: e.target.value })}
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-xs"
-            >
-              <option value="local">local（当前 Windows 本机）</option>
-              <option value="ssh-ubuntu">ssh-ubuntu（Ubuntu2404 隔离虚拟机）</option>
-              <option value="wsl2">wsl2（本机 WSL2 Linux）</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="mb-1.5 block font-semibold">阶段超时（秒）</label>
-            <input
-              type="number"
-              min={10}
-              max={86400}
-              value={curCfg.timeout_sec || 300}
-              onChange={(e) => updateStage(selectedStage, { timeout_sec: Number(e.target.value || 300) })}
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-xs"
-            />
-          </div>
-
-          {selectedStage === 'verify' && (
-            <div>
-              <label className="mb-1.5 block font-semibold">Docker 环境排错最大重试次数（熔断上限）</label>
-              <input
-                type="number"
-                min={0}
-                max={10}
-                value={curCfg.max_env_retries ?? 2}
-                onChange={(e) => updateStage(selectedStage, { max_env_retries: Number(e.target.value) })}
-                className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-xs"
-              />
-            </div>
-          )}
-        </div>
-      </aside>
+        </aside>
+      </div>
     </div>
   )
 }

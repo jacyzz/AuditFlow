@@ -1,395 +1,533 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { marked } from 'marked'
+import CodeMirror from '@uiw/react-codemirror'
+import { markdown } from '@codemirror/lang-markdown'
+import { yaml } from '@codemirror/lang-yaml'
+import { oneDark } from '@codemirror/theme-one-dark'
+import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
 import {
-  CopyPlus,
+  Code2,
+  Columns2,
   Eye,
-  FileCode2,
+  GitFork,
   Plus,
   RotateCcw,
   Save,
   Search,
-  SplitSquareHorizontal,
   Trash2,
   Upload,
 } from 'lucide-react'
-import { api, renderMarkdown } from '../api'
+import { api } from '../api'
+import {
+  Button,
+  Field,
+  Input,
+  Modal,
+  SegmentedControl,
+  Select,
+  StatusPill,
+  cn,
+} from '../components/ui'
 
 interface Props {
   toast: (msg: string) => void
   onRefresh: () => Promise<void>
+  dark: boolean
 }
 
-export default function SkillStudio({ toast, onRefresh }: Props) {
+const STAGE_LABELS: Record<string, string> = {
+  dispatcher: '总控调度',
+  scout: '项目发现',
+  triage_project: '项目预判',
+  surface_map: '安全面测绘',
+  deep_audit: '深度审计',
+  triage_vuln: '漏洞复核',
+  verify: '隔离验证',
+  report: '报告写作',
+}
+
+function stripFrontmatter(md: string): string {
+  return md.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '')
+}
+
+export default function SkillStudio({ toast, onRefresh, dark }: Props) {
   const [skills, setSkills] = useState<any[]>([])
-  const [query, setQuery] = useState('')
-  const [selectedName, setSelectedName] = useState<string>('')
+  const [search, setSearch] = useState('')
+  const [selectedName, setSelectedName] = useState('')
   const [detail, setDetail] = useState<any>(null)
-  const [manifestYaml, setManifestYaml] = useState('')
   const [promptMd, setPromptMd] = useState('')
-  const [viewMode, setViewMode] = useState<'split' | 'preview' | 'edit'>('split')
+  const [manifestYaml, setManifestYaml] = useState('')
+  const [viewMode, setViewMode] = useState<'preview' | 'split' | 'yaml'>('split')
+  const [dirty, setDirty] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  // Modals
   const [showCreate, setShowCreate] = useState(false)
-  const [newSkill, setNewSkill] = useState({
-    name: 'audit/my-custom-rule',
+  const [createForm, setCreateForm] = useState({
+    name: '',
     stage: 'deep_audit',
-    description: '自定义专项安全审计规则',
-    prompt_markdown: '# 自定义审计 Skill\n\n## 排查目标\n- \n\n## 输出要求\n严格遵循 `docs/SCHEMAS.md`。',
+    description: '',
+    prompt_markdown: '# 自定义审计 Skill\n\n## 目标\n描述本 Skill 聚焦的漏洞类别与代码入口。\n\n## 排查清单\n1. 检查未鉴权路由\n2. 追踪可控参数流向危险 Sink\n',
   })
 
-  const loadSkills = async () => {
+  const [showFork, setShowFork] = useState(false)
+  const [forkName, setForkName] = useState('')
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  const loadList = async (focusName?: string) => {
     try {
-      const res = await api<{ skills: any[] }>('/api/skills')
-      setSkills(res.skills)
-      if (!selectedName && res.skills.length) {
-        selectSkill(res.skills[0].name)
-      }
+      const res = await api<any>('/api/skills')
+      const list = res.skills || []
+      setSkills(list)
+      const target =
+        focusName ||
+        (selectedName && list.some((s: any) => s.name === selectedName)
+          ? selectedName
+          : list[0]?.name || '')
+      if (target) setSelectedName(target)
     } catch (e: any) {
       toast('加载 Skill 列表失败: ' + e.message)
     }
   }
 
-  const selectSkill = async (name: string) => {
-    setSelectedName(name)
+  const loadDetail = async (name: string) => {
+    if (!name) return
     try {
-      const res = await api<{ skill: any }>(`/api/skills/detail?name=${encodeURIComponent(name)}`)
+      const res = await api<any>(`/api/skills/detail?name=${encodeURIComponent(name)}`)
       setDetail(res.skill)
-      setManifestYaml(res.skill.manifest_yaml)
-      setPromptMd(res.skill.prompt_markdown)
+      setPromptMd(res.skill.prompt_markdown || '')
+      setManifestYaml(res.skill.manifest_yaml || '')
+      setDirty(false)
     } catch (e: any) {
-      toast('读取 Skill 失败: ' + e.message)
+      toast('读取 Skill 详情失败: ' + e.message)
     }
   }
 
   useEffect(() => {
-    loadSkills()
+    loadList()
   }, [])
+
+  useEffect(() => {
+    if (selectedName) loadDetail(selectedName)
+  }, [selectedName])
+
+  const grouped = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    const filtered = skills.filter(
+      (s) =>
+        !q ||
+        s.name.toLowerCase().includes(q) ||
+        (s.description || '').toLowerCase().includes(q) ||
+        (s.stage || '').toLowerCase().includes(q),
+    )
+    const map: Record<string, any[]> = {}
+    for (const s of filtered) {
+      const k = s.stage || 'other'
+      if (!map[k]) map[k] = []
+      map[k].push(s)
+    }
+    return map
+  }, [skills, search])
 
   const saveSkill = async () => {
     if (!detail) return
+    setSaving(true)
     try {
-      const res = await api<{ skill: any }>('/api/skills/save', 'POST', {
+      const res = await api<any>('/api/skills/save', 'POST', {
         name: detail.name,
         manifest_yaml: manifestYaml,
         prompt_markdown: promptMd,
       })
       setDetail(res.skill)
-      toast(`已保存 ${detail.name}（落盘至 skills_custom/ 覆盖层，内置原件受保护）`)
-      await loadSkills()
+      setDirty(false)
+      toast(`已保存到覆盖层 skills_custom/：${detail.name}`)
+      await loadList(detail.name)
       await onRefresh()
     } catch (e: any) {
       toast('保存失败: ' + e.message)
+    } finally {
+      setSaving(false)
     }
   }
 
-  const createNewSkill = async () => {
+  const createSkill = async () => {
+    if (!createForm.name.trim()) {
+      toast('请输入 Skill 名称（例如 audit/mcp-sandbox-escape）')
+      return
+    }
     try {
-      const res = await api<{ skill: any }>('/api/skills/create', 'POST', newSkill)
+      const res = await api<any>('/api/skills/create', 'POST', createForm)
+      toast(`已创建自定义 Skill：${res.skill.name}`)
       setShowCreate(false)
-      toast(`已新建自定义 Skill：${res.skill.name}`)
-      await loadSkills()
-      await selectSkill(res.skill.name)
+      await loadList(res.skill.name)
+      await loadDetail(res.skill.name)
       await onRefresh()
     } catch (e: any) {
-      toast('新建失败: ' + e.message)
+      toast('创建失败: ' + e.message)
     }
   }
 
-  const forkCurrent = async () => {
-    if (!detail) return
-    const nextName = window.prompt('输入新 Skill 名称（格式 group/slug）:', `${detail.name}-custom`)
-    if (!nextName) return
+  const forkSkill = async () => {
+    if (!detail || !forkName.trim()) return
     try {
-      const res = await api<{ skill: any }>('/api/skills/fork', 'POST', {
+      const res = await api<any>('/api/skills/fork', 'POST', {
         source_name: detail.name,
-        new_name: nextName.trim(),
+        new_name: forkName.trim(),
       })
-      toast(`已复制为 ${res.skill.name}`)
-      await loadSkills()
-      await selectSkill(res.skill.name)
+      toast(`已派生新 Skill：${res.skill.name}`)
+      setShowFork(false)
+      setForkName('')
+      await loadList(res.skill.name)
+      await loadDetail(res.skill.name)
+      await onRefresh()
     } catch (e: any) {
-      toast('复制失败: ' + e.message)
+      toast('Fork 失败: ' + e.message)
     }
   }
 
   const resetOrDelete = async () => {
     if (!detail) return
-    const label = detail.can_reset ? '恢复为内置默认版本' : '删除该自定义 Skill'
-    if (!window.confirm(`确定要${label}（${detail.name}）吗？`)) return
     try {
-      const res = await api<{ action: string }>('/api/skills/reset', 'POST', { name: detail.name })
-      toast(res.action === 'reset_to_builtin' ? '已恢复内置版本' : '已删除自定义 Skill')
-      await loadSkills()
-      if (res.action === 'reset_to_builtin') {
-        await selectSkill(detail.name)
-      } else {
-        setDetail(null)
-        setSelectedName('')
-      }
+      const res = await api<any>('/api/skills/reset', 'POST', { name: detail.name })
+      toast(res.action === 'deleted' ? `已删除自定义 Skill：${detail.name}` : `已恢复为内置默认版本：${detail.name}`)
+      await loadList()
       await onRefresh()
     } catch (e: any) {
       toast('操作失败: ' + e.message)
     }
   }
 
-  const importMarkdownFile = (file: File) => {
+  const handleImportMd = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
     const reader = new FileReader()
     reader.onload = () => {
-      const content = String(reader.result || '')
       const slug = file.name.replace(/\.md$/i, '').toLowerCase().replace(/[^a-z0-9_-]+/g, '-')
-      setNewSkill((prev) => ({
+      setCreateForm((prev) => ({
         ...prev,
         name: `audit/${slug || 'imported-skill'}`,
-        prompt_markdown: content,
+        description: `从 ${file.name} 导入的自定义 Skill`,
+        prompt_markdown: String(reader.result || ''),
       }))
       setShowCreate(true)
     }
     reader.readAsText(file)
+    e.target.value = ''
   }
 
-  const filtered = skills.filter(
-    (s) =>
-      s.name.toLowerCase().includes(query.toLowerCase()) ||
-      s.description.toLowerCase().includes(query.toLowerCase()) ||
-      s.stage.toLowerCase().includes(query.toLowerCase()),
-  )
+  const sourceBadge = (source: string) => {
+    if (source === 'override') return <StatusPill tone="warn">已覆写</StatusPill>
+    if (source === 'custom') return <StatusPill tone="ok">自定义</StatusPill>
+    return <StatusPill tone="neutral">内置</StatusPill>
+  }
 
   return (
-    <div className="grid h-full grid-cols-[290px_1fr] overflow-hidden">
-      {/* Left Skill List */}
-      <div className="flex flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--surface)]">
-        <div className="border-b border-[var(--border)] p-3">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-sm font-bold">Skill 管理中心</span>
-            <div className="flex gap-1">
-              <label className="flex cursor-pointer items-center gap-1 rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-2 py-1 text-xs hover:border-sky-400">
-                <Upload className="h-3.5 w-3.5" /> 导入
-                <input
-                  type="file"
-                  accept=".md,.txt"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0]
-                    if (f) importMarkdownFile(f)
-                  }}
-                />
-              </label>
+    <div className="flex h-full overflow-hidden">
+      {/* Left Categorized Skill Tree */}
+      <aside className="flex w-[264px] shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface-subtle)]">
+        <div className="space-y-2.5 border-b border-[var(--border)] p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-[var(--fg)]">
+              Skill 工坊 ({skills.length})
+            </span>
+            <div className="flex items-center gap-1">
               <button
-                onClick={() => setShowCreate(true)}
-                className="flex items-center gap-1 rounded-md bg-sky-500 px-2 py-1 text-xs font-medium text-white hover:bg-sky-400"
+                type="button"
+                title="导入本地 .md 文件"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--fg)] cursor-pointer"
               >
-                <Plus className="h-3.5 w-3.5" /> 新建
+                <Upload className="h-3.5 w-3.5" />
               </button>
+              <Button size="sm" variant="primary" onClick={() => setShowCreate(true)}>
+                <Plus className="h-3.5 w-3.5" /> 新建
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".md,.markdown,.txt"
+                className="hidden"
+                onChange={handleImportMd}
+              />
             </div>
           </div>
-          <div className="flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-2.5 py-1.5">
-            <Search className="h-3.5 w-3.5 text-[var(--muted)]" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="搜索 Skill 名称或阶段..."
-              className="w-full bg-transparent text-xs outline-none"
+
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-2 h-3.5 w-3.5 text-[var(--subtle)]" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="搜索 Skill 名称或描述..."
+              className="pl-8"
             />
           </div>
         </div>
 
-        <div className="flex-1 space-y-1 overflow-y-auto p-2">
-          {filtered.map((s) => (
-            <button
-              key={s.name}
-              onClick={() => selectSkill(s.name)}
-              className={`w-full rounded-xl border px-3 py-2 text-left transition ${
-                selectedName === s.name
-                  ? 'border-sky-500/60 bg-sky-500/15'
-                  : 'border-transparent hover:bg-[var(--surface-2)]'
-              }`}
-            >
-              <div className="flex items-center justify-between gap-1">
-                <span className="truncate text-xs font-semibold">{s.name}</span>
-                <span
-                  className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                    s.source === 'custom'
-                      ? 'bg-purple-500/20 text-purple-300'
-                      : s.source === 'override'
-                        ? 'bg-amber-500/20 text-amber-300'
-                        : 'bg-slate-600/30 text-[var(--muted)]'
-                  }`}
-                >
-                  {s.source === 'custom' ? '自定义' : s.source === 'override' ? '已定制' : '内置'}
-                </span>
+        <div className="flex-1 space-y-4 overflow-y-auto p-2.5">
+          {Object.entries(grouped).map(([stage, list]) => (
+            <div key={stage}>
+              <div className="mb-1 px-2 text-[10.5px] font-semibold tracking-wide text-[var(--subtle)] uppercase">
+                {STAGE_LABELS[stage] || stage}
               </div>
-              <div className="mt-0.5 line-clamp-2 text-[11px] text-[var(--muted)]">{s.description}</div>
-            </button>
+              <div className="space-y-0.5">
+                {list.map((s) => {
+                  const active = s.name === selectedName
+                  return (
+                    <button
+                      key={s.name}
+                      type="button"
+                      onClick={() => setSelectedName(s.name)}
+                      className={cn(
+                        'flex w-full items-center justify-between gap-2 rounded-[8px] px-2.5 py-2 text-left transition-colors cursor-pointer',
+                        active
+                          ? 'bg-[var(--surface-active)] font-medium text-[var(--fg)]'
+                          : 'text-[var(--fg-secondary)] hover:bg-[var(--surface-hover)]',
+                      )}
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate font-mono text-[12px]">{s.name}</div>
+                        <div className="truncate text-[11px] text-[var(--muted)]">
+                          {s.description}
+                        </div>
+                      </div>
+                      {s.source !== 'builtin' && (
+                        <span
+                          className={cn(
+                            'h-1.5 w-1.5 shrink-0 rounded-full',
+                            s.source === 'custom' ? 'bg-[var(--ok)]' : 'bg-[var(--warn)]',
+                          )}
+                        />
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
           ))}
         </div>
-      </div>
+      </aside>
 
-      {/* Right Preview / Split Editor */}
-      <div className="flex flex-col overflow-hidden bg-[var(--bg)]">
-        {!detail ? (
-          <div className="flex flex-1 items-center justify-center text-sm text-[var(--muted)]">
-            请在左侧选择一个 Skill 预览或编辑
-          </div>
-        ) : (
+      {/* Main Editor & Preview Area */}
+      <div className="flex flex-1 flex-col overflow-hidden bg-[var(--surface)]">
+        {detail ? (
           <>
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] bg-[var(--surface)] px-5 py-3">
-              <div>
+            {/* Top Editor Toolbar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-3">
+              <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <strong className="text-sm">{detail.name}</strong>
-                  <span className="rounded bg-sky-500/15 px-2 py-0.5 font-mono text-[11px] text-sky-400">
-                    stage: {detail.stage}
-                  </span>
+                  <h1 className="truncate font-mono text-[14.5px] font-semibold">{detail.name}</h1>
+                  {sourceBadge(detail.source)}
+                  {dirty && <StatusPill tone="info">未保存</StatusPill>}
                 </div>
-                <div className="text-xs text-[var(--muted)]">{detail.description}</div>
+                <p className="mt-0.5 truncate text-xs text-[var(--muted)]">{detail.description}</p>
               </div>
-              <div className="flex items-center gap-1.5">
-                <div className="flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5 text-xs">
-                  {[
-                    ['preview', '预览', Eye],
-                    ['split', '分屏', SplitSquareHorizontal],
-                    ['edit', '源码', FileCode2],
-                  ].map(([m, lbl, Icon]: any) => (
-                    <button
-                      key={m}
-                      onClick={() => setViewMode(m)}
-                      className={`flex items-center gap-1 rounded-md px-2.5 py-1 ${
-                        viewMode === m ? 'bg-sky-500/20 text-sky-400' : 'text-[var(--muted)]'
-                      }`}
-                    >
-                      <Icon className="h-3.5 w-3.5" /> {lbl}
-                    </button>
-                  ))}
-                </div>
-                <button
-                  onClick={forkCurrent}
-                  className="flex items-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-1.5 text-xs hover:border-sky-400"
+
+              <div className="flex items-center gap-2">
+                <SegmentedControl
+                  value={viewMode}
+                  onChange={setViewMode}
+                  options={[
+                    { value: 'preview', label: '预览', icon: <Eye className="h-3.5 w-3.5" /> },
+                    { value: 'split', label: '双栏编辑', icon: <Columns2 className="h-3.5 w-3.5" /> },
+                    { value: 'yaml', label: 'skill.yaml', icon: <Code2 className="h-3.5 w-3.5" /> },
+                  ]}
+                />
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    setForkName(`${detail.name}-custom`)
+                    setShowFork(true)
+                  }}
                 >
-                  <CopyPlus className="h-3.5 w-3.5" /> 复制
-                </button>
+                  <GitFork className="h-3.5 w-3.5" /> Fork
+                </Button>
                 {(detail.can_reset || detail.can_delete) && (
-                  <button
-                    onClick={resetOrDelete}
-                    className="flex items-center gap-1 rounded-lg border border-rose-500/40 bg-rose-500/10 px-2.5 py-1.5 text-xs text-rose-400 hover:bg-rose-500/20"
-                  >
-                    {detail.can_reset ? <RotateCcw className="h-3.5 w-3.5" /> : <Trash2 className="h-3.5 w-3.5" />}
-                    {detail.can_reset ? '恢复内置' : '删除'}
-                  </button>
+                  <Button size="sm" variant="danger" onClick={resetOrDelete}>
+                    {detail.can_delete ? (
+                      <>
+                        <Trash2 className="h-3.5 w-3.5" /> 删除
+                      </>
+                    ) : (
+                      <>
+                        <RotateCcw className="h-3.5 w-3.5" /> 恢复内置
+                      </>
+                    )}
+                  </Button>
                 )}
-                <button
-                  onClick={saveSkill}
-                  className="flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500"
-                >
-                  <Save className="h-3.5 w-3.5" /> 保存更改
-                </button>
+                <Button size="sm" variant="primary" disabled={saving || !dirty} onClick={saveSkill}>
+                  <Save className="h-3.5 w-3.5" /> {saving ? '保存中...' : '保存'}
+                </Button>
               </div>
             </div>
 
-            <div className="flex flex-1 overflow-hidden">
-              {(viewMode === 'edit' || viewMode === 'split') && (
-                <div className="flex flex-1 flex-col gap-3 overflow-y-auto border-r border-[var(--border)] p-4">
-                  <div>
-                    <div className="mb-1 text-xs font-semibold text-[var(--muted)]">SKILL.md（Agent 操作指令正文）</div>
-                    <textarea
-                      value={promptMd}
-                      onChange={(e) => setPromptMd(e.target.value)}
-                      className="min-h-[340px] w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 font-mono text-xs leading-relaxed outline-none focus:border-sky-500"
-                    />
-                  </div>
-                  <div>
-                    <div className="mb-1 text-xs font-semibold text-[var(--muted)]">skill.yaml（元信息与契约声明）</div>
-                    <textarea
-                      value={manifestYaml}
-                      onChange={(e) => setManifestYaml(e.target.value)}
-                      className="min-h-[150px] w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 font-mono text-xs outline-none focus:border-sky-500"
-                    />
-                  </div>
+            {/* Editor Surface */}
+            <div className="flex-1 overflow-hidden">
+              {viewMode === 'preview' && (
+                <div className="h-full overflow-y-auto px-10 py-7">
+                  <div
+                    className="md-prose mx-auto max-w-3xl"
+                    dangerouslySetInnerHTML={{
+                      __html: marked.parse(stripFrontmatter(promptMd || '')) as string,
+                    }}
+                  />
                 </div>
               )}
 
-              {(viewMode === 'preview' || viewMode === 'split') && (
-                <div className="flex-1 overflow-y-auto p-6">
-                  <div className="mb-3 flex flex-wrap gap-1.5 text-[11px]">
-                    <span className="rounded bg-[var(--surface-2)] px-2 py-0.5 text-[var(--muted)]">
-                      输入: {(detail.inputs || []).join(', ') || '无'}
-                    </span>
-                    <span className="rounded bg-[var(--surface-2)] px-2 py-0.5 text-[var(--muted)]">
-                      输出: {(detail.outputs || []).join(', ') || '无'}
-                    </span>
+              {viewMode === 'split' && (
+                <PanelGroup orientation="horizontal" className="h-full">
+                  <Panel defaultSize={52} minSize={28}>
+                    <div className="flex h-full flex-col">
+                      <div className="border-b border-[var(--border)] bg-[var(--surface-subtle)] px-4 py-1.5 font-mono text-[11px] text-[var(--muted)]">
+                        SKILL.md（修改自动落盘至 skills_custom/，不破坏内置原文件）
+                      </div>
+                      <div className="flex-1 overflow-hidden">
+                        <CodeMirror
+                          value={promptMd}
+                          height="100%"
+                          theme={dark ? oneDark : 'light'}
+                          extensions={[markdown()]}
+                          onChange={(val) => {
+                            setPromptMd(val)
+                            setDirty(true)
+                          }}
+                          basicSetup={{ lineNumbers: true, foldGutter: true, highlightActiveLine: true }}
+                        />
+                      </div>
+                    </div>
+                  </Panel>
+                  <PanelResizeHandle className="w-1 bg-[var(--border)] transition-colors hover:bg-[var(--primary)]/40 cursor-col-resize" />
+                  <Panel defaultSize={48} minSize={25}>
+                    <div className="flex h-full flex-col">
+                      <div className="border-b border-[var(--border)] bg-[var(--surface-subtle)] px-4 py-1.5 text-[11px] text-[var(--muted)]">
+                        实时 Markdown 渲染预览
+                      </div>
+                      <div className="flex-1 overflow-y-auto px-7 py-5">
+                        <div
+                          className="md-prose"
+                          dangerouslySetInnerHTML={{
+                      __html: marked.parse(stripFrontmatter(promptMd || '')) as string,
+                    }}
+                        />
+                      </div>
+                    </div>
+                  </Panel>
+                </PanelGroup>
+              )}
+
+              {viewMode === 'yaml' && (
+                <div className="flex h-full flex-col">
+                  <div className="border-b border-[var(--border)] bg-[var(--surface-subtle)] px-4 py-1.5 font-mono text-[11px] text-[var(--muted)]">
+                    skill.yaml（定义输入输出契约、适用阶段与推荐适配器）
                   </div>
-                  <div
-                    className="md-prose rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 text-sm"
-                    dangerouslySetInnerHTML={{ __html: renderMarkdown(promptMd) }}
-                  />
+                  <div className="flex-1 overflow-hidden">
+                    <CodeMirror
+                      value={manifestYaml}
+                      height="100%"
+                      theme={dark ? oneDark : 'light'}
+                      extensions={[yaml()]}
+                      onChange={(val) => {
+                        setManifestYaml(val)
+                        setDirty(true)
+                      }}
+                      basicSetup={{ lineNumbers: true, foldGutter: true }}
+                    />
+                  </div>
                 </div>
               )}
             </div>
           </>
+        ) : (
+          <div className="flex h-full items-center justify-center text-sm text-[var(--muted)]">
+            请从左侧选择一个 Skill 查看或编辑
+          </div>
         )}
       </div>
 
       {/* Create Skill Modal */}
-      {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-xl rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-2xl">
-            <h2 className="text-base font-bold">新建自定义 Skill</h2>
-            <div className="mt-4 space-y-3 text-xs">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block font-semibold">名称（group/slug）</label>
-                  <input
-                    value={newSkill.name}
-                    onChange={(e) => setNewSkill({ ...newSkill, name: e.target.value })}
-                    className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block font-semibold">所属阶段</label>
-                  <select
-                    value={newSkill.stage}
-                    onChange={(e) => setNewSkill({ ...newSkill, stage: e.target.value })}
-                    className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2"
-                  >
-                    <option value="scout">scout（找项目）</option>
-                    <option value="triage_project">triage_project（项目预评判）</option>
-                    <option value="surface_map">surface_map（安全面测绘）</option>
-                    <option value="deep_audit">deep_audit（深度源码审计）</option>
-                    <option value="triage_vuln">triage_vuln（漏洞预评判）</option>
-                    <option value="verify">verify（隔离验证）</option>
-                    <option value="report">report（CNVD 报告写作）</option>
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="mb-1 block font-semibold">简介</label>
-                <input
-                  value={newSkill.description}
-                  onChange={(e) => setNewSkill({ ...newSkill, description: e.target.value })}
-                  className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block font-semibold">SKILL.md 正文</label>
-                <textarea
-                  value={newSkill.prompt_markdown}
-                  onChange={(e) => setNewSkill({ ...newSkill, prompt_markdown: e.target.value })}
-                  className="min-h-[200px] w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] p-3 font-mono"
-                />
-              </div>
-            </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                onClick={() => setShowCreate(false)}
-                className="rounded-lg border border-[var(--border)] px-3.5 py-1.5 text-xs"
+      <Modal
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        title="新建自定义 Skill"
+        description="将保存在 skills_custom/ 目录，立即可在「编排画布」中选择绑定。"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowCreate(false)}>
+              取消
+            </Button>
+            <Button variant="primary" onClick={createSkill}>
+              创建 Skill
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3.5">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Skill 名称" hint="格式 category/slug">
+              <Input
+                className="font-mono"
+                value={createForm.name}
+                onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
+                placeholder="audit/ai-mcp-rce"
+              />
+            </Field>
+            <Field label="所属阶段">
+              <Select
+                value={createForm.stage}
+                onChange={(e) => setCreateForm({ ...createForm, stage: e.target.value })}
               >
-                取消
-              </button>
-              <button
-                onClick={createNewSkill}
-                className="rounded-lg bg-sky-500 px-4 py-1.5 text-xs font-semibold text-white hover:bg-sky-400"
-              >
-                创建 Skill
-              </button>
-            </div>
+                {Object.entries(STAGE_LABELS).map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v} ({k})
+                  </option>
+                ))}
+              </Select>
+            </Field>
           </div>
+          <Field label="简介">
+            <Input
+              value={createForm.description}
+              onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
+              placeholder="针对 MCP Server 工具调用与沙箱逃逸的定向源码审计"
+            />
+          </Field>
+          <Field label="SKILL.md 初始内容">
+            <textarea
+              rows={8}
+              value={createForm.prompt_markdown}
+              onChange={(e) => setCreateForm({ ...createForm, prompt_markdown: e.target.value })}
+              className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--surface-subtle)] p-3 font-mono text-xs text-[var(--fg)]"
+            />
+          </Field>
         </div>
-      )}
+      </Modal>
+
+      {/* Fork Skill Modal */}
+      <Modal
+        open={showFork}
+        onClose={() => setShowFork(false)}
+        title={`Fork Skill · ${detail?.name}`}
+        description="基于当前 Skill 派生一个独立副本到 skills_custom/。"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowFork(false)}>
+              取消
+            </Button>
+            <Button variant="primary" onClick={forkSkill}>
+              确认派生
+            </Button>
+          </>
+        }
+      >
+        <Field label="新 Skill 名称" hint="格式 category/slug">
+          <Input
+            className="font-mono"
+            value={forkName}
+            onChange={(e) => setForkName(e.target.value)}
+            placeholder="audit/my-custom-fork"
+          />
+        </Field>
+      </Modal>
     </div>
   )
 }
